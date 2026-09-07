@@ -1,6 +1,6 @@
 ---
 name: paper-review-audit
-description: 审读一篇或多篇科研论文，建立主张—证据链，复核图表、方法与统计，执行反证检查，并输出可校验的 report.json 与派生报告。用于技术 review、证据 audit、复算、论文完整性核查或多论文比较；不用于只需润色或普通摘要的请求。
+description: 审读一篇或多篇科研论文，建立主张—证据链，复核图表、方法与统计，执行反证检查，并输出包含 JSON、Markdown 与证据截图的可上传报告包。用于技术 review、证据 audit、复算、论文完整性核查或多论文比较；不用于只需润色或普通摘要的请求。
 ---
 
 # Paper Review Audit
@@ -33,12 +33,15 @@ description: 审读一篇或多篇科研论文，建立主张—证据链，复�
 
 ## 完成门槛
 
-每次输出至少包含 `report.json` 与由其生成的 `report.md`。完成前运行：
+每次输出至少包含一个可直接上传的 `review-package.zip`，包内必须有 `report.json`、由其生成的 `report.md`，以及 `report.json` 引用的全部证据截图。`report.json` 仍是唯一机器数据源，不把图片转成 base64 塞入 JSON。完成前运行：
 
 ```bash
 node scripts/validate-report.mjs <output/report.json>
 node scripts/render-report.mjs <output/report.json> <output/report.md>
+node scripts/package-report.mjs <output/report.json> <output/evidence-images> <output/review-package.zip>
 ```
+
+报告包固定结构为根目录 `report.json`、`report.md` 和 `evidence/<image_path>`。打包脚本遇到任一缺图即失败；交付前必须用同一脚本成功生成报告包。
 
 只有限定范围内必需检查均完成时，`meta.execution_status` 才可为 `completed`。如未取得全文、读图、计算或关键附件，如实标为 `partial`/`blocked`/`not_run`。不得把格式校验通过表述为科学结论已验证。
 

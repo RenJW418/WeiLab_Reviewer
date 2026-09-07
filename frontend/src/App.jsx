@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import JSZip from 'jszip';
 import { validateReport } from './lib/validation.js';
 
 const statusLabels = { confirmed: '已确认', needs_clarification: '待澄清', conditional: '条件性问题', ruled_out: '已排除', resolved: '已解决' };
@@ -12,6 +13,15 @@ const readTextFile = file => typeof file.text === 'function'
     reader.onerror = () => reject(reader.error || new Error('文件读取失败'));
     reader.readAsText(file);
   });
+const readBinaryFile = file => typeof file.arrayBuffer === 'function'
+  ? file.arrayBuffer()
+  : new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error || new Error('文件读取失败'));
+    reader.readAsArrayBuffer(file);
+  });
+const imageMime = name => name.toLowerCase().endsWith('.png') ? 'image/png' : name.toLowerCase().endsWith('.webp') ? 'image/webp' : 'image/jpeg';
 
 export default function App() {
   const [user, setUser] = useState(undefined);
@@ -96,17 +106,45 @@ export default function App() {
 
   const importReport = async event => {
     const files = [...(event.target.files || [])]; event.target.value = '';
+    const zipFile = files.find(file => file.name.toLowerCase().endsWith('.zip'));
     const jsonFile = files.find(file => file.name.toLowerCase().endsWith('.json'));
-    if (!jsonFile) return setError('请选择一个 report.json；证据图片可以同时多选。');
+    if (!zipFile && !jsonFile) return setError('请选择 review-package.zip；也兼容 report.json 与证据图片多选。');
     try {
-      const next = JSON.parse(await readTextFile(jsonFile));
+      let next;
+      let evidenceFiles;
+      if (zipFile) {
+        if (zipFile.size > 100 * 1024 * 1024) throw new Error('报告包不能超过 100 MiB');
+        const archive = await JSZip.loadAsync(await readBinaryFile(zipFile));
+        const reportEntry = archive.file('report.json');
+        if (!reportEntry) throw new Error('ZIP 根目录缺少 report.json');
+        if (!archive.file('report.md')) throw new Error('ZIP 根目录缺少 report.md');
+        const reportText = await reportEntry.async('text');
+        if (reportText.length > 10 * 1024 * 1024) throw new Error('report.json 不能超过 10 MiB');
+        next = JSON.parse(reportText);
+        const expectedNames = [...new Set(next.evidence?.map(item => item.image_path).filter(Boolean) || [])];
+        let expandedImageBytes = 0;
+        evidenceFiles = (await Promise.all(expectedNames.map(async fileName => {
+          const entry = archive.file(`evidence/${fileName}`) || archive.file(fileName);
+          if (!entry) return null;
+          const image = await entry.async('uint8array');
+          expandedImageBytes += image.byteLength;
+          if (expandedImageBytes > 100 * 1024 * 1024) throw new Error('解压后的证据图片不能超过 100 MiB');
+          return new File([image], fileName, { type: imageMime(fileName) });
+        }))).filter(Boolean);
+      } else {
+        next = JSON.parse(await readTextFile(jsonFile));
+        evidenceFiles = files.filter(file => file !== jsonFile);
+      }
       if (!useReport(next)) return;
       const validation = validateReport(next); if (!validation.valid) return;
+      const expectedImageCount = new Set(next.evidence.map(item => item.image_path).filter(Boolean)).size;
+      if (zipFile && evidenceFiles.length < expectedImageCount) throw new Error(`报告需要 ${expectedImageCount} 张证据图片，ZIP 中仅找到 ${evidenceFiles.length} 张`);
       const response = await fetch('/api/reports', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(next) });
       const body = await response.json().catch(() => ({}));
       if (!response.ok && response.status !== 409) throw new Error(body.error || `HTTP ${response.status}`);
 
-      const imageResult = await uploadEvidenceFiles(files.filter(file => file !== jsonFile), next);
+      const imageResult = await uploadEvidenceFiles(evidenceFiles, next);
+      if (zipFile && imageResult.uploaded < expectedImageCount) throw new Error(`${expectedImageCount - imageResult.uploaded} 张证据图片上传失败`);
       await refreshReports();
       setNotice(`报告已保存到 ${user.name} 的账号${imageResult.uploaded ? `，同时关联 ${imageResult.uploaded} 张证据图片` : ''}${imageResult.unmatched ? `；${imageResult.unmatched} 个文件因名称与报告不匹配而跳过` : ''}。`);
     } catch (importError) { setError(`导入失败：${importError.message}`); }
@@ -148,8 +186,8 @@ export default function App() {
       <a className="wordmark" href="/" aria-label="论文核查报告首页"><span className="wordmark-mark">核</span><span>论文核查报告</span></a>
       <div className="account-actions">
         {reports.length > 0 && <select aria-label="我的报告" value={report ? `${report.meta.report_id}::${report.meta.report_revision}` : ''} onChange={event => { const [reportId, revision] = event.target.value.split('::'); const selected = reports.find(item => item.report_id === reportId && item.report_revision === Number(revision)); if (selected) loadReport(selected); }}><option value="" disabled>我的报告</option>{reports.map(item => <option key={`${item.report_id}-${item.report_revision}`} value={`${item.report_id}::${item.report_revision}`}>{item.title} · r{item.report_revision}</option>)}</select>}
-        <button className="quiet-action" onClick={() => fileRef.current?.click()}>导入并保存</button>
-        <input ref={fileRef} className="sr-only" aria-label="导入报告和证据图片" type="file" accept="application/json,.json,image/png,image/jpeg,image/webp" multiple onChange={importReport} />
+        <button className="quiet-action" onClick={() => fileRef.current?.click()}>上传报告包</button>
+        <input ref={fileRef} className="sr-only" aria-label="上传报告包" type="file" accept="application/zip,.zip,application/json,.json,image/png,image/jpeg,image/webp" multiple onChange={importReport} />
         {report && <><button className="quiet-action" onClick={() => evidenceRef.current?.click()}>补充证据图片</button><input ref={evidenceRef} className="sr-only" aria-label="补充证据图片" type="file" accept="image/png,image/jpeg,image/webp" multiple onChange={addEvidenceImages} /></>}
         <span className="account-name">{user.name}</span><button className="logout-action" onClick={logout}>退出</button>
       </div>
@@ -159,7 +197,7 @@ export default function App() {
       {notice && <p className="save-notice" role="status">{notice}</p>}
       {error && <p className="inline-error" role="alert">{error}</p>}
       {loadingReport && <div className="state-card"><span className="loading-dot" />正在读取报告…</div>}
-      {!loadingReport && !report && <div className="empty-library"><div className="eyebrow">MY REPORTS</div><h1>还没有保存的报告</h1><p>选择 report.json 后会立即校验并保存到你的账号。若有证据截图，可以与 JSON 一起多选。</p><button className="primary-action" onClick={() => fileRef.current?.click()}>导入第一份报告</button></div>}
+      {!loadingReport && !report && <div className="empty-library"><div className="eyebrow">MY REPORTS</div><h1>还没有保存的报告</h1><p>选择 review-package.zip，即可一次上传报告、可读版本和全部证据截图。</p><button className="primary-action" onClick={() => fileRef.current?.click()}>上传第一份报告</button></div>}
       {!loadingReport && report && <ReportView report={report} issues={issues} evidenceById={evidenceById} materialById={materialById} openIssueId={openIssueId} setOpenIssueId={setOpenIssueId} />}
     </main>
   </div>;

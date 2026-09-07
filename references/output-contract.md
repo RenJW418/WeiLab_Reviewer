@@ -2,6 +2,24 @@
 
 `schemas/report.schema.json` 是 v1 的规范来源，当前仅支持 `schema_version: 1.0.0`。`report.md`、前端统计与导出必须从同一 JSON 派生。
 
+## 默认交付包
+
+默认交付单文件 `review-package.zip`，结构固定为：
+
+```text
+review-package.zip
+├── report.json
+├── report.md
+└── evidence/
+    └── <image_path>.png
+```
+
+- `report.json` 仍是唯一机器契约；ZIP 是传输容器，不替代 JSON Schema。
+- 每个非空 `evidence[].image_path` 必须在 ZIP 内存在同名 `evidence/<image_path>`；不允许只有路径没有图片。
+- `report.md` 必须从包内同一份 `report.json` 生成，不能单独维护结论。
+- 不在 JSON 或 Markdown 中嵌入 base64 图片，以免报告膨胀和重复存储。
+- 使用 `scripts/package-report.mjs` 生成并回读校验报告包；缺少任一引用图片时打包失败。
+
 ## 对象关系
 
 - `meta`：报告/修订/run 身份、语言、模式、任务状态与 `real | synthetic_demo` 来源。

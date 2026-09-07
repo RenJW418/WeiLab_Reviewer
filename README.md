@@ -6,7 +6,7 @@
 
 - `SKILL.md`：skill 入口和完成门槛；详细流程在 `references/`。
 - `schemas/report.schema.json`：`1.0.0` 唯一数据契约；`scripts/validate-report.mjs` 同时检查 JSON Schema、全局 ID、跨对象引用和确认问题的证据门槛。
-- `scripts/render-report.mjs`：从 JSON 生成可独立阅读的 Markdown。
+- `scripts/render-report.mjs`：从 JSON 生成可独立阅读的 Markdown；`scripts/package-report.mjs` 将 JSON、Markdown 与证据截图打成一个可上传 ZIP。
 - `scripts/extract-method-parameters.mjs`：从 Methods 纯文本全量提取带单位参数，减少厚度、温度、时间、浓度、剂量和阈值的漏检。
 - `frontend/`：React/Vite 最终用户页面，按问题逐条展示；问题展开后显示证据、原文截图、定位、影响与建议。
 - `scripts/server.mjs`：同源静态服务、姓名密码认证和报告 API；每个账号的报告及证据图片独立持久化，相同 report_id/revision 或同名图片不覆盖。
@@ -46,7 +46,7 @@ docker compose up -d --build
 
 公开服务器应在反向代理上启用 HTTPS、登录速率限制和数据备份；启用 HTTPS 后同时设置 `COOKIE_SECURE=1`。在仅有 HTTP 的 IP 地址上，密码传输不加密，请勿使用其他服务的复用密码。
 
-浏览器中可以将 `report.json` 与它引用的证据图片一起多选导入；也可以先导入报告，再用“补充证据图片”单独上传截图。图片文件名必须与 JSON 对应 evidence 的 `image_path` 完全一致。若通过 API 上传，先注册或登录并保存 Cookie：
+浏览器默认上传单个 `review-package.zip`，前端会自动读取其中的 JSON、Markdown 和全部证据图片。旧版 `report.json` 与图片多选、以及“补充证据图片”方式继续兼容。图片文件名必须与 JSON 对应 evidence 的 `image_path` 完全一致。若通过 API 上传，先注册或登录并保存 Cookie：
 
 ```bash
 curl -c session.cookie -H 'Content-Type: application/json' \
@@ -77,9 +77,10 @@ curl --fail-with-body \
 ```bash
 node scripts/validate-report.mjs /path/to/run/report.json
 node scripts/render-report.mjs /path/to/run/report.json /path/to/run/report.md
+node scripts/package-report.mjs /path/to/run/report.json /path/to/run/evidence-images /path/to/run/review-package.zip
 ```
 
-然后在页面导入 `report.json`，或通过上述 API 上传。服务器有报告时，页面自动打开最新版本，并以精简的问题—证据列表呈现。
+然后在页面上传单个 `review-package.zip`。服务器有报告时，页面自动打开最新版本，并以精简的问题—证据列表呈现。旧版 `report.json` 加图片多选方式仍兼容，但不再是默认交付方式。
 
 ## 安全与边界
 

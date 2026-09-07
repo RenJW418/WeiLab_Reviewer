@@ -13,6 +13,7 @@
     "serve": "node scripts/server.mjs",
     "validate": "node scripts/validate-report.mjs reports/example/report.json",
     "render": "node scripts/render-report.mjs reports/example/report.json reports/example/report.md",
+    "package:report": "node scripts/package-report.mjs",
     "test": "npm run test:ui && npm run test:server",
     "test:ui": "vitest run --config frontend/vitest.config.js",
     "test:server": "node tests/server-auth.test.mjs",
@@ -21,6 +22,7 @@
   "dependencies": {
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
+    "jszip": "^3.10.1",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"
   },
@@ -33,5 +35,7 @@
     "vite": "^7.1.4",
     "vitest": "^3.2.4"
   },
-  "engines": { "node": ">=20" }
+  "engines": {
+    "node": ">=20"
+  }
 }

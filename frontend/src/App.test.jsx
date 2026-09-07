@@ -2,6 +2,7 @@ import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import JSZip from 'jszip';
 import report from '../../reports/example/report.json';
 import App from './App.jsx';
 
@@ -71,10 +72,32 @@ describe('reader-facing issue list', () => {
       .mockResolvedValueOnce({ ok: true, json: async () => ({ reports: [{ report_id: report.meta.report_id, report_revision: report.meta.report_revision }] }) });
     vi.stubGlobal('fetch', fetchMock);
     render(<App />);
-    const input = await screen.findByLabelText('导入报告和证据图片');
+    const input = await screen.findByLabelText('上传报告包');
     await userEvent.upload(input, new File([JSON.stringify(report)], 'report.json', { type: 'application/json' }));
     expect(await screen.findByText(/报告已保存到 测试用户 的账号/)).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith('/api/reports', expect.objectContaining({ method: 'POST' }));
+  });
+
+  it('imports report JSON and its evidence image from one ZIP package', async () => {
+    const reportWithImage = structuredClone(report);
+    reportWithImage.evidence[0].image_path = 'evidence-page.png';
+    const archive = new JSZip();
+    archive.file('report.json', JSON.stringify(reportWithImage));
+    archive.file('report.md', '# 可读报告');
+    archive.file('evidence/evidence-page.png', new Uint8Array([137, 80, 78, 71]));
+    const packageBytes = await archive.generateAsync({ type: 'uint8array' });
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ authenticated: true, user: { user_id: 'U-1', name: '测试用户' } }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ reports: [] }) })
+      .mockResolvedValueOnce({ ok: true, status: 201, json: async () => ({ ok: true }) })
+      .mockResolvedValueOnce({ ok: true, status: 201, json: async () => ({ ok: true }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ reports: [{ report_id: report.meta.report_id, report_revision: report.meta.report_revision }] }) });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<App />);
+    const input = await screen.findByLabelText('上传报告包');
+    await userEvent.upload(input, new File([packageBytes], 'review-package.zip', { type: 'application/zip' }));
+    expect(await screen.findByText(/同时关联 1 张证据图片/)).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/assets/evidence-page.png'), expect.objectContaining({ method: 'POST' }));
   });
 
   it('uploads evidence images separately after a report is already saved', async () => {
