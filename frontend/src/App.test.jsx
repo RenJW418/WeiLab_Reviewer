@@ -8,10 +8,20 @@ import App from './App.jsx';
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 const mockServerReport = value => vi.stubGlobal('fetch', vi.fn()
+  .mockResolvedValueOnce({ ok: true, json: async () => ({ authenticated: true, user: { user_id: 'U-1', name: '测试用户' } }) })
   .mockResolvedValueOnce({ ok: true, json: async () => ({ reports: [{ report_id: value.meta.report_id, report_revision: value.meta.report_revision }] }) })
   .mockResolvedValueOnce({ ok: true, json: async () => structuredClone(value) }));
 
 describe('reader-facing issue list', () => {
+  it('requires login before any report is visible', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ authenticated: false }) }));
+    render(<App />);
+    expect(await screen.findByLabelText('姓名')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: '登录' })).toHaveLength(2);
+    expect(screen.getByRole('button', { name: '创建账号' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '发现的问题' })).not.toBeInTheDocument();
+  });
+
   it('loads the newest server report without workbench navigation or demo labels', async () => {
     mockServerReport(report);
     render(<App />);
@@ -51,5 +61,19 @@ describe('reader-facing issue list', () => {
     await screen.findByRole('heading', { level: 1, name: report.papers[0].title });
     expect(screen.queryByRole('button', { name: /安全性分母差异可由缺失值规则解释/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /旧稿组别颜色问题已在 v1.0 解决/ })).not.toBeInTheDocument();
+  });
+
+  it('saves an imported report to the signed-in account', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ authenticated: true, user: { user_id: 'U-1', name: '测试用户' } }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ reports: [] }) })
+      .mockResolvedValueOnce({ ok: true, status: 201, json: async () => ({ ok: true }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ reports: [{ report_id: report.meta.report_id, report_revision: report.meta.report_revision }] }) });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<App />);
+    const input = await screen.findByLabelText('导入报告和证据图片');
+    await userEvent.upload(input, new File([JSON.stringify(report)], 'report.json', { type: 'application/json' }));
+    expect(await screen.findByText(/报告已保存到 测试用户 的账号/)).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith('/api/reports', expect.objectContaining({ method: 'POST' }));
   });
 });

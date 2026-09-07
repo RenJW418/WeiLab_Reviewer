@@ -13,7 +13,9 @@
     "serve": "node scripts/server.mjs",
     "validate": "node scripts/validate-report.mjs reports/example/report.json",
     "render": "node scripts/render-report.mjs reports/example/report.json reports/example/report.md",
-    "test": "vitest run --config frontend/vitest.config.js",
+    "test": "npm run test:ui && npm run test:server",
+    "test:ui": "vitest run --config frontend/vitest.config.js",
+    "test:server": "node tests/server-auth.test.mjs",
     "test:watch": "vitest --config frontend/vitest.config.js"
   },
   "dependencies": {

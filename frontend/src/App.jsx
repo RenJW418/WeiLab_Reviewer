@@ -4,146 +4,156 @@ import { validateReport } from './lib/validation.js';
 const statusLabels = { confirmed: '已确认', needs_clarification: '待澄清', conditional: '条件性问题', ruled_out: '已排除', resolved: '已解决' };
 const impactLabels = { reporting: '报告表述', local_result: '局部结果', key_claim: '关键结论', unknown: '影响待定' };
 const formatLocator = locator => Object.entries(locator || {}).filter(([, value]) => value != null && value !== '').map(([key, value]) => `${key}: ${value}`).join(' · ');
+const readTextFile = file => typeof file.text === 'function'
+  ? file.text()
+  : new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error || new Error('文件读取失败'));
+    reader.readAsText(file);
+  });
 
 export default function App() {
+  const [user, setUser] = useState(undefined);
+  const [authMode, setAuthMode] = useState('login');
+  const [name, setName] = useState('');
+  const [password, setPassword] = useState('');
+  const [reports, setReports] = useState([]);
   const [report, setReport] = useState(null);
   const [openIssueId, setOpenIssueId] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loadingReport, setLoadingReport] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const fileRef = useRef(null);
 
   const useReport = next => {
     const result = validateReport(next);
-    if (!result.valid) {
-      setError(`报告格式校验失败：${result.errors[0]?.path || '/'} ${result.errors[0]?.message || ''}`);
-      return false;
-    }
-    setReport(next);
-    setOpenIssueId(null);
-    setError('');
-    return true;
+    if (!result.valid) { setError(`报告格式校验失败：${result.errors[0]?.path || '/'} ${result.errors[0]?.message || ''}`); return false; }
+    setReport(next); setOpenIssueId(null); setError(''); return true;
+  };
+
+  const loadReport = async descriptor => {
+    setLoadingReport(true); setNotice('');
+    try {
+      const response = await fetch(`/api/reports/${encodeURIComponent(descriptor.report_id)}/${descriptor.report_revision}`);
+      if (response.status === 401) { setUser(null); setReport(null); return; }
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      useReport(await response.json());
+    } catch (loadError) { setError(`无法读取报告：${loadError.message}`); }
+    finally { setLoadingReport(false); }
+  };
+
+  const refreshReports = async ({ openLatest = false } = {}) => {
+    try {
+      const response = await fetch('/api/reports');
+      if (response.status === 401) { setUser(null); setReports([]); setReport(null); return; }
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json(); setReports(data.reports || []);
+      if (openLatest && data.reports?.[0]) await loadReport(data.reports[0]);
+    } catch (loadError) { setError(`无法读取报告列表：${loadError.message}`); }
   };
 
   useEffect(() => {
     let cancelled = false;
-    const loadLatest = async () => {
-      try {
-        const listResponse = await fetch('/api/reports');
-        if (!listResponse.ok) throw new Error(`HTTP ${listResponse.status}`);
-        const list = await listResponse.json();
-        const latest = list.reports?.[0];
-        if (!latest) throw new Error('服务器中还没有报告');
-        const reportResponse = await fetch(`/api/reports/${encodeURIComponent(latest.report_id)}/${latest.report_revision}`);
-        if (!reportResponse.ok) throw new Error(`HTTP ${reportResponse.status}`);
-        const next = await reportResponse.json();
-        if (!cancelled) useReport(next);
-      } catch (loadError) {
-        if (!cancelled) setError(`暂时无法读取报告：${loadError.message}`);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-    loadLatest();
+    fetch('/api/auth/session').then(response => response.json()).then(session => {
+      if (cancelled) return;
+      setUser(session.authenticated ? session.user : null);
+    }).catch(() => { if (!cancelled) { setUser(null); setError('暂时无法连接服务器'); } });
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => { if (user) refreshReports({ openLatest: true }); }, [user?.user_id]);
+
+  const submitAuth = async event => {
+    event.preventDefault(); setError(''); setNotice('');
+    try {
+      const response = await fetch(`/api/auth/${authMode}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name, password }) });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || `HTTP ${response.status}`);
+      setUser(body.user); setName(''); setPassword('');
+    } catch (authError) { setError(authError.message); }
+  };
+
+  const logout = async () => {
+    await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+    setUser(null); setReports([]); setReport(null); setOpenIssueId(null); setNotice(''); setError('');
+  };
+
+  const importReport = async event => {
+    const files = [...(event.target.files || [])]; event.target.value = '';
+    const jsonFile = files.find(file => file.name.toLowerCase().endsWith('.json'));
+    if (!jsonFile) return setError('请选择一个 report.json；证据图片可以同时多选。');
+    try {
+      const next = JSON.parse(await readTextFile(jsonFile));
+      if (!useReport(next)) return;
+      const validation = validateReport(next); if (!validation.valid) return;
+      const response = await fetch('/api/reports', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(next) });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok && response.status !== 409) throw new Error(body.error || `HTTP ${response.status}`);
+
+      const expectedImages = new Set(next.evidence.map(item => item.image_path).filter(Boolean));
+      let uploadedImages = 0;
+      for (const file of files.filter(item => expectedImages.has(item.name))) {
+        const imageResponse = await fetch(`/api/reports/${encodeURIComponent(next.meta.report_id)}/${next.meta.report_revision}/assets/${encodeURIComponent(file.name)}`, { method: 'POST', headers: { 'content-type': file.type || 'image/png' }, body: file });
+        if (imageResponse.ok || imageResponse.status === 409) uploadedImages += 1;
+      }
+      await refreshReports();
+      setNotice(`报告已保存到 ${user.name} 的账号${uploadedImages ? `，同时关联 ${uploadedImages} 张证据图片` : ''}。`);
+    } catch (importError) { setError(`导入失败：${importError.message}`); }
+  };
 
   const issues = useMemo(() => report?.issues.filter(issue => !['ruled_out', 'resolved'].includes(issue.status)) ?? [], [report]);
   const evidenceById = useMemo(() => new Map((report?.evidence ?? []).map(item => [item.evidence_id, item])), [report]);
   const materialById = useMemo(() => new Map((report?.materials ?? []).map(item => [item.material_id, item])), [report]);
 
-  const importReport = async event => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    try { useReport(JSON.parse(await file.text())); }
-    catch (importError) { setError(`无法读取文件：${importError.message}`); }
-    event.target.value = '';
-  };
+  if (user === undefined) return <div className="auth-page"><div className="state-card"><span className="loading-dot" />正在连接…</div></div>;
+
+  if (!user) return <div className="auth-page">
+    <section className="auth-intro"><div className="wordmark auth-wordmark"><span className="wordmark-mark">核</span><span>论文核查报告</span></div><div><div className="eyebrow">PRIVATE ARCHIVE</div><h1>保存并查看<br />你的核查报告</h1><p>报告按姓名账号独立保存。登录后只能访问自己此前上传的内容。</p></div></section>
+    <section className="auth-card">
+      <div className="auth-tabs"><button className={authMode === 'login' ? 'active' : ''} onClick={() => { setAuthMode('login'); setError(''); }}>登录</button><button className={authMode === 'register' ? 'active' : ''} onClick={() => { setAuthMode('register'); setError(''); }}>创建账号</button></div>
+      <form onSubmit={submitAuth}>
+        <label>姓名<input aria-label="姓名" value={name} onChange={event => setName(event.target.value)} autoComplete="username" maxLength="60" required /></label>
+        <label>密码<input aria-label="密码" value={password} onChange={event => setPassword(event.target.value)} type="password" autoComplete={authMode === 'login' ? 'current-password' : 'new-password'} minLength="8" maxLength="128" required /></label>
+        {error && <p className="auth-error" role="alert">{error}</p>}
+        <button className="primary-action" type="submit">{authMode === 'login' ? '登录' : '创建并登录'}</button>
+      </form>
+      <p className="auth-footnote">密码至少 8 个字符。姓名相同的账号不能重复注册。</p>
+    </section>
+  </div>;
 
   return <div className="site-shell">
-    <header className="document-nav">
-      <div className="nav-inner">
-        <a className="wordmark" href="/" aria-label="论文核查报告首页"><span className="wordmark-mark">核</span><span>论文核查报告</span></a>
-        <button className="quiet-action" onClick={() => fileRef.current?.click()}>导入报告</button>
-        <input ref={fileRef} className="sr-only" aria-label="导入 report.json" type="file" accept="application/json,.json" onChange={importReport} />
+    <header className="document-nav"><div className="nav-inner">
+      <a className="wordmark" href="/" aria-label="论文核查报告首页"><span className="wordmark-mark">核</span><span>论文核查报告</span></a>
+      <div className="account-actions">
+        {reports.length > 0 && <select aria-label="我的报告" value={report ? `${report.meta.report_id}::${report.meta.report_revision}` : ''} onChange={event => { const [reportId, revision] = event.target.value.split('::'); const selected = reports.find(item => item.report_id === reportId && item.report_revision === Number(revision)); if (selected) loadReport(selected); }}><option value="" disabled>我的报告</option>{reports.map(item => <option key={`${item.report_id}-${item.report_revision}`} value={`${item.report_id}::${item.report_revision}`}>{item.title} · r{item.report_revision}</option>)}</select>}
+        <button className="quiet-action" onClick={() => fileRef.current?.click()}>导入并保存</button>
+        <input ref={fileRef} className="sr-only" aria-label="导入报告和证据图片" type="file" accept="application/json,.json,image/png,image/jpeg,image/webp" multiple onChange={importReport} />
+        <span className="account-name">{user.name}</span><button className="logout-action" onClick={logout}>退出</button>
       </div>
-    </header>
+    </div></header>
 
     <main className="page-wrap">
-      {loading && <div className="state-card"><span className="loading-dot" />正在读取报告…</div>}
-      {!loading && error && !report && <div className="state-card error-state"><strong>报告暂不可用</strong><p>{error}</p><button onClick={() => fileRef.current?.click()}>从本地导入</button></div>}
-      {report && <>
-        <section className="report-intro">
-          <div className="eyebrow">REVIEW REPORT</div>
-          <h1>{report.papers[0]?.title || report.meta.title}</h1>
-          <p className="report-subtitle">{report.scope.objective}</p>
-          <div className="report-meta">
-            <span>{report.papers[0]?.publication?.venue || '论文'}</span>
-            {report.papers[0]?.doi && <span>DOI {report.papers[0].doi}</span>}
-            <span>{issues.length} 条当前问题</span>
-            <span>{report.meta.generated_at.slice(0, 10)}</span>
-          </div>
-          {error && <p className="inline-error">{error}</p>}
-        </section>
-
-        <section className="issues-section" aria-labelledby="issues-title">
-          <div className="section-heading">
-            <div><div className="eyebrow">FINDINGS</div><h2 id="issues-title">发现的问题</h2></div>
-            <p>点击任一问题查看对应证据与核查细节</p>
-          </div>
-
-          <div className="issue-list">
-            {issues.map((issue, index) => {
-              const expanded = openIssueId === issue.issue_id;
-              const evidence = issue.evidence_ids.map(id => evidenceById.get(id)).filter(Boolean);
-              return <article className={`issue-row status-${issue.status}`} key={issue.issue_id}>
-                <button className="issue-summary" aria-expanded={expanded} aria-controls={`issue-detail-${issue.issue_id}`} onClick={() => setOpenIssueId(expanded ? null : issue.issue_id)}>
-                  <span className="issue-number">{String(index + 1).padStart(2, '0')}</span>
-                  <span className="issue-copy">
-                    <span className="issue-labels"><span className="status-label"><i />{statusLabels[issue.status] || issue.status}</span><span>{impactLabels[issue.impact_scope] || issue.impact_scope}</span></span>
-                    <strong>{issue.title}</strong>
-                    <span className="issue-observation">{issue.observation}</span>
-                  </span>
-                  <span className="expand-icon" aria-hidden="true">{expanded ? '−' : '+'}</span>
-                </button>
-
-                {expanded && <div className="issue-detail" id={`issue-detail-${issue.issue_id}`}>
-                  <section className="detail-block evidence-block">
-                    <h3>对应证据</h3>
-                    <div className="evidence-stack">
-                      {evidence.map((item, evidenceIndex) => {
-                        const material = materialById.get(item.material_id);
-                        return <div className="evidence-row" key={item.evidence_id}>
-                          <div className="evidence-index">证据 {evidenceIndex + 1}</div>
-                          <div>
-                            <p>{item.content}</p>
-                            <div className="evidence-source"><span>{formatLocator(item.locator)}</span>{material?.file_name && <span>{material.file_name}</span>}</div>
-                            {item.image_path && <a className="evidence-image" href={`/api/reports/${encodeURIComponent(report.meta.report_id)}/${report.meta.report_revision}/assets/${encodeURIComponent(item.image_path)}`} target="_blank" rel="noreferrer">
-                              <img src={`/api/reports/${encodeURIComponent(report.meta.report_id)}/${report.meta.report_revision}/assets/${encodeURIComponent(item.image_path)}`} alt={`${item.content}的原文截图`} loading="lazy" />
-                              <span>查看原图</span>
-                            </a>}
-                          </div>
-                        </div>;
-                      })}
-                    </div>
-                  </section>
-
-                  <div className="detail-grid">
-                    <section className="detail-block"><h3>核查结论</h3><p>{issue.status_reason}</p></section>
-                    <section className="detail-block"><h3>影响判断</h3><p>{issue.impact_reason}</p></section>
-                    <section className="detail-block"><h3>核查方法</h3><p>{issue.verification_method}</p><ul>{issue.verification_steps.map(step => <li key={step}>{step}</li>)}</ul></section>
-                    <section className="detail-block recommendation"><h3>建议处理</h3><p>{issue.recommended_action}</p></section>
-                  </div>
-
-                  {issue.missing_materials.length > 0 && <section className="missing-note"><strong>仍需材料</strong><span>{issue.missing_materials.join('；')}</span></section>}
-                </div>}
-              </article>;
-            })}
-          </div>
-          {!issues.length && <div className="state-card">当前报告没有待展示的问题。</div>}
-        </section>
-
-        <footer className="report-footer"><span>{report.meta.report_id} · revision {report.meta.report_revision}</span><span>结论以当前已取得材料为限</span></footer>
-      </>}
+      {notice && <p className="save-notice" role="status">{notice}</p>}
+      {error && <p className="inline-error" role="alert">{error}</p>}
+      {loadingReport && <div className="state-card"><span className="loading-dot" />正在读取报告…</div>}
+      {!loadingReport && !report && <div className="empty-library"><div className="eyebrow">MY REPORTS</div><h1>还没有保存的报告</h1><p>选择 report.json 后会立即校验并保存到你的账号。若有证据截图，可以与 JSON 一起多选。</p><button className="primary-action" onClick={() => fileRef.current?.click()}>导入第一份报告</button></div>}
+      {!loadingReport && report && <ReportView report={report} issues={issues} evidenceById={evidenceById} materialById={materialById} openIssueId={openIssueId} setOpenIssueId={setOpenIssueId} />}
     </main>
   </div>;
+}
+
+function ReportView({ report, issues, evidenceById, materialById, openIssueId, setOpenIssueId }) {
+  return <>
+    <section className="report-intro"><div className="eyebrow">REVIEW REPORT</div><h1>{report.papers[0]?.title || report.meta.title}</h1><p className="report-subtitle">{report.scope.objective}</p><div className="report-meta"><span>{report.papers[0]?.publication?.venue || '论文'}</span>{report.papers[0]?.doi && <span>DOI {report.papers[0].doi}</span>}<span>{issues.length} 条当前问题</span><span>{report.meta.generated_at.slice(0, 10)}</span></div></section>
+    <section className="issues-section" aria-labelledby="issues-title"><div className="section-heading"><div><div className="eyebrow">FINDINGS</div><h2 id="issues-title">发现的问题</h2></div><p>点击任一问题查看对应证据与核查细节</p></div>
+      <div className="issue-list">{issues.map((issue, index) => {
+        const expanded = openIssueId === issue.issue_id; const evidence = issue.evidence_ids.map(id => evidenceById.get(id)).filter(Boolean);
+        return <article className={`issue-row status-${issue.status}`} key={issue.issue_id}>
+          <button className="issue-summary" aria-expanded={expanded} aria-controls={`issue-detail-${issue.issue_id}`} onClick={() => setOpenIssueId(expanded ? null : issue.issue_id)}><span className="issue-number">{String(index + 1).padStart(2, '0')}</span><span className="issue-copy"><span className="issue-labels"><span className="status-label"><i />{statusLabels[issue.status] || issue.status}</span><span>{impactLabels[issue.impact_scope] || issue.impact_scope}</span></span><strong>{issue.title}</strong><span className="issue-observation">{issue.observation}</span></span><span className="expand-icon" aria-hidden="true">{expanded ? '−' : '+'}</span></button>
+          {expanded && <div className="issue-detail" id={`issue-detail-${issue.issue_id}`}><section className="detail-block evidence-block"><h3>对应证据</h3><div className="evidence-stack">{evidence.map((item, evidenceIndex) => { const material = materialById.get(item.material_id); const imageUrl = `/api/reports/${encodeURIComponent(report.meta.report_id)}/${report.meta.report_revision}/assets/${encodeURIComponent(item.image_path || '')}`; return <div className="evidence-row" key={item.evidence_id}><div className="evidence-index">证据 {evidenceIndex + 1}</div><div><p>{item.content}</p><div className="evidence-source"><span>{formatLocator(item.locator)}</span>{material?.file_name && <span>{material.file_name}</span>}</div>{item.image_path && <a className="evidence-image" href={imageUrl} target="_blank" rel="noreferrer"><img src={imageUrl} alt={`${item.content}的原文截图`} loading="lazy" /><span>查看原图</span></a>}</div></div>; })}</div></section><div className="detail-grid"><section className="detail-block"><h3>核查结论</h3><p>{issue.status_reason}</p></section><section className="detail-block"><h3>影响判断</h3><p>{issue.impact_reason}</p></section><section className="detail-block"><h3>核查方法</h3><p>{issue.verification_method}</p><ul>{issue.verification_steps.map(step => <li key={step}>{step}</li>)}</ul></section><section className="detail-block recommendation"><h3>建议处理</h3><p>{issue.recommended_action}</p></section></div>{issue.missing_materials.length > 0 && <section className="missing-note"><strong>仍需材料</strong><span>{issue.missing_materials.join('；')}</span></section>}</div>}
+        </article>;
+      })}</div>{!issues.length && <div className="state-card">当前报告没有待展示的问题。</div>}
+    </section><footer className="report-footer"><span>{report.meta.report_id} · revision {report.meta.report_revision}</span><span>结论以当前已取得材料为限</span></footer>
+  </>;
 }
