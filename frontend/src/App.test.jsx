@@ -52,6 +52,19 @@ describe('reader-facing issue list', () => {
     expect(screen.getByText('建议处理')).toBeInTheDocument();
   });
 
+  it('places confirmed findings before conditional and clarification findings', async () => {
+    const outOfOrder = structuredClone(report);
+    const confirmed = outOfOrder.issues.find(issue => issue.status === 'confirmed');
+    const conditional = outOfOrder.issues.find(issue => issue.status === 'conditional');
+    outOfOrder.issues = [conditional, confirmed, ...outOfOrder.issues.filter(issue => ![conditional.issue_id, confirmed.issue_id].includes(issue.issue_id))];
+    mockServerReport(outOfOrder);
+    render(<App />);
+    await openReport(outOfOrder);
+    const issueButtons = await screen.findAllByRole('button', { name: /已确认|条件性问题|待澄清/ });
+    expect(issueButtons[0]).toHaveAccessibleName(/已确认/);
+    expect(issueButtons[1]).toHaveAccessibleName(/条件性问题/);
+  });
+
   it('shows source screenshots when an evidence record provides one', async () => {
     const reportWithImage = structuredClone(report);
     reportWithImage.evidence.find(item => item.evidence_id === 'E-ABSTRACT-1').image_path = 'abstract-page.png';

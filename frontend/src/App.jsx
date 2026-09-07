@@ -3,6 +3,7 @@ import JSZip from 'jszip';
 import { validateReport } from './lib/validation.js';
 
 const statusLabels = { confirmed: '已确认', needs_clarification: '待澄清', conditional: '条件性问题', ruled_out: '已排除', resolved: '已解决' };
+const issueStatusOrder = { confirmed: 0, conditional: 1, needs_clarification: 2 };
 const impactLabels = { reporting: '报告表述', local_result: '局部结果', key_claim: '关键结论', unknown: '影响待定' };
 const formatLocator = locator => Object.entries(locator || {}).filter(([, value]) => value != null && value !== '').map(([key, value]) => `${key}: ${value}`).join(' · ');
 const readTextFile = file => typeof file.text === 'function'
@@ -168,7 +169,11 @@ export default function App() {
     } catch (uploadError) { setError(`证据图片上传失败：${uploadError.message}`); }
   };
 
-  const issues = useMemo(() => report?.issues.filter(issue => !['ruled_out', 'resolved'].includes(issue.status)) ?? [], [report]);
+  const issues = useMemo(() => report?.issues
+    .map((issue, sourceIndex) => ({ issue, sourceIndex }))
+    .filter(({ issue }) => !['ruled_out', 'resolved'].includes(issue.status))
+    .sort((a, b) => (issueStatusOrder[a.issue.status] ?? 99) - (issueStatusOrder[b.issue.status] ?? 99) || a.sourceIndex - b.sourceIndex)
+    .map(({ issue }) => issue) ?? [], [report]);
   const evidenceById = useMemo(() => new Map((report?.evidence ?? []).map(item => [item.evidence_id, item])), [report]);
   const materialById = useMemo(() => new Map((report?.materials ?? []).map(item => [item.material_id, item])), [report]);
 
