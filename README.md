@@ -46,7 +46,7 @@ docker compose up -d --build
 
 公开服务器应在反向代理上启用 HTTPS、登录速率限制和数据备份；启用 HTTPS 后同时设置 `COOKIE_SECURE=1`。在仅有 HTTP 的 IP 地址上，密码传输不加密，请勿使用其他服务的复用密码。
 
-浏览器中可以将 `report.json` 与它引用的证据图片一起多选导入。若通过 API 上传，先注册或登录并保存 Cookie：
+浏览器中可以将 `report.json` 与它引用的证据图片一起多选导入；也可以先导入报告，再用“补充证据图片”单独上传截图。图片文件名必须与 JSON 对应 evidence 的 `image_path` 完全一致。若通过 API 上传，先注册或登录并保存 Cookie：
 
 ```bash
 curl -c session.cookie -H 'Content-Type: application/json' \

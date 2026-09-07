@@ -76,4 +76,20 @@ describe('reader-facing issue list', () => {
     expect(await screen.findByText(/报告已保存到 测试用户 的账号/)).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith('/api/reports', expect.objectContaining({ method: 'POST' }));
   });
+
+  it('uploads evidence images separately after a report is already saved', async () => {
+    const reportWithImage = structuredClone(report);
+    reportWithImage.evidence[0].image_path = 'evidence-page.png';
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ authenticated: true, user: { user_id: 'U-1', name: '测试用户' } }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ reports: [{ report_id: report.meta.report_id, report_revision: report.meta.report_revision }] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => reportWithImage })
+      .mockResolvedValueOnce({ ok: true, status: 201, json: async () => ({ ok: true }) });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<App />);
+    const input = await screen.findByLabelText('补充证据图片');
+    await userEvent.upload(input, new File(['image'], 'evidence-page.png', { type: 'image/png' }));
+    expect(await screen.findByText('已关联 1 张证据图片。')).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenLastCalledWith(expect.stringContaining('/assets/evidence-page.png'), expect.objectContaining({ method: 'POST' }));
+  });
 });
