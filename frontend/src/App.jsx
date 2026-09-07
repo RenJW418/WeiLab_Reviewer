@@ -32,6 +32,7 @@ export default function App() {
   const [report, setReport] = useState(null);
   const [openIssueId, setOpenIssueId] = useState(null);
   const [loadingReport, setLoadingReport] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const fileRef = useRef(null);
@@ -93,15 +94,17 @@ export default function App() {
   const uploadEvidenceFiles = async (files, targetReport) => {
     const expectedImages = new Set(targetReport.evidence.map(item => item.image_path).filter(Boolean));
     const matchingFiles = files.filter(file => expectedImages.has(file.name));
-    let uploaded = 0;
+    let added = 0;
+    let existing = 0;
     let failed = 0;
     for (const file of matchingFiles) {
       const imageResponse = await fetch(`/api/reports/${encodeURIComponent(targetReport.meta.report_id)}/${targetReport.meta.report_revision}/assets/${encodeURIComponent(file.name)}`, { method: 'POST', headers: { 'content-type': file.type || 'image/png' }, body: file });
       if (imageResponse.status === 401) { setUser(null); throw new Error('登录已过期，请重新登录'); }
-      if (imageResponse.ok || imageResponse.status === 409) uploaded += 1;
+      if (imageResponse.ok) added += 1;
+      else if (imageResponse.status === 409) existing += 1;
       else failed += 1;
     }
-    return { uploaded, failed, unmatched: files.length - matchingFiles.length };
+    return { added, existing, available: added + existing, failed, unmatched: files.length - matchingFiles.length };
   };
 
   const importReport = async event => {
@@ -109,6 +112,7 @@ export default function App() {
     const zipFile = files.find(file => file.name.toLowerCase().endsWith('.zip'));
     const jsonFile = files.find(file => file.name.toLowerCase().endsWith('.json'));
     if (!zipFile && !jsonFile) return setError('请选择 review-package.zip；也兼容 report.json 与证据图片多选。');
+    setUploading(true); setError(''); setNotice('');
     try {
       let next;
       let evidenceFiles;
@@ -142,12 +146,15 @@ export default function App() {
       const response = await fetch('/api/reports', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(next) });
       const body = await response.json().catch(() => ({}));
       if (!response.ok && response.status !== 409) throw new Error(body.error || `HTTP ${response.status}`);
+      const reportAlreadyExists = response.status === 409;
 
       const imageResult = await uploadEvidenceFiles(evidenceFiles, next);
-      if (zipFile && imageResult.uploaded < expectedImageCount) throw new Error(`${expectedImageCount - imageResult.uploaded} 张证据图片上传失败`);
+      if (zipFile && imageResult.available < expectedImageCount) throw new Error(`${expectedImageCount - imageResult.available} 张证据图片上传失败`);
       await refreshReports();
-      setNotice(`报告已保存到 ${user.name} 的账号${imageResult.uploaded ? `，同时关联 ${imageResult.uploaded} 张证据图片` : ''}${imageResult.unmatched ? `；${imageResult.unmatched} 个文件因名称与报告不匹配而跳过` : ''}。`);
+      if (reportAlreadyExists) setNotice(`该报告版本已存在；已核对 ${imageResult.available}/${expectedImageCount} 张证据图片，无需重复保存。`);
+      else setNotice(`报告已保存到 ${user.name} 的账号${imageResult.added ? `，新增 ${imageResult.added} 张证据图片` : ''}${imageResult.unmatched ? `；${imageResult.unmatched} 个文件因名称与报告不匹配而跳过` : ''}。`);
     } catch (importError) { setError(`导入失败：${importError.message}`); }
+    finally { setUploading(false); }
   };
 
   const addEvidenceImages = async event => {
@@ -156,8 +163,8 @@ export default function App() {
     setError(''); setNotice('');
     try {
       const result = await uploadEvidenceFiles(files, report);
-      if (!result.uploaded && result.unmatched) throw new Error('所选图片的文件名与当前报告 image_path 不一致');
-      setNotice(`已关联 ${result.uploaded} 张证据图片${result.unmatched ? `；跳过 ${result.unmatched} 个名称不匹配的文件` : ''}${result.failed ? `；${result.failed} 张上传失败` : ''}。`);
+      if (!result.available && result.unmatched) throw new Error('所选图片的文件名与当前报告 image_path 不一致');
+      setNotice(`新增 ${result.added} 张证据图片${result.existing ? `；${result.existing} 张已存在` : ''}${result.unmatched ? `；跳过 ${result.unmatched} 个名称不匹配的文件` : ''}${result.failed ? `；${result.failed} 张上传失败` : ''}。`);
     } catch (uploadError) { setError(`证据图片上传失败：${uploadError.message}`); }
   };
 
@@ -186,9 +193,9 @@ export default function App() {
       <a className="wordmark" href="/" aria-label="论文核查报告首页"><span className="wordmark-mark">核</span><span>论文核查报告</span></a>
       <div className="account-actions">
         {reports.length > 0 && <select aria-label="我的报告" value={report ? `${report.meta.report_id}::${report.meta.report_revision}` : ''} onChange={event => { const [reportId, revision] = event.target.value.split('::'); const selected = reports.find(item => item.report_id === reportId && item.report_revision === Number(revision)); if (selected) loadReport(selected); }}><option value="" disabled>我的报告</option>{reports.map(item => <option key={`${item.report_id}-${item.report_revision}`} value={`${item.report_id}::${item.report_revision}`}>{item.title} · r{item.report_revision}</option>)}</select>}
-        <button className="quiet-action" onClick={() => fileRef.current?.click()}>上传报告包</button>
+        <button className="quiet-action" onClick={() => fileRef.current?.click()} disabled={uploading} aria-busy={uploading}>{uploading ? '正在上传…' : '上传报告包'}</button>
         <input ref={fileRef} className="sr-only" aria-label="上传报告包" type="file" accept="application/zip,.zip,application/json,.json,image/png,image/jpeg,image/webp" multiple onChange={importReport} />
-        {report && <><button className="quiet-action" onClick={() => evidenceRef.current?.click()}>补充证据图片</button><input ref={evidenceRef} className="sr-only" aria-label="补充证据图片" type="file" accept="image/png,image/jpeg,image/webp" multiple onChange={addEvidenceImages} /></>}
+        {report && <><button className="quiet-action" onClick={() => evidenceRef.current?.click()} disabled={uploading}>补充证据图片</button><input ref={evidenceRef} className="sr-only" aria-label="补充证据图片" type="file" accept="image/png,image/jpeg,image/webp" multiple onChange={addEvidenceImages} /></>}
         <span className="account-name">{user.name}</span><button className="logout-action" onClick={logout}>退出</button>
       </div>
     </div></header>

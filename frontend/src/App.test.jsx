@@ -96,7 +96,7 @@ describe('reader-facing issue list', () => {
     render(<App />);
     const input = await screen.findByLabelText('上传报告包');
     await userEvent.upload(input, new File([packageBytes], 'review-package.zip', { type: 'application/zip' }));
-    expect(await screen.findByText(/同时关联 1 张证据图片/)).toBeInTheDocument();
+    expect(await screen.findByText(/新增 1 张证据图片/)).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/assets/evidence-page.png'), expect.objectContaining({ method: 'POST' }));
   });
 
@@ -112,7 +112,7 @@ describe('reader-facing issue list', () => {
     render(<App />);
     const input = await screen.findByLabelText('补充证据图片');
     await userEvent.upload(input, new File(['image'], 'evidence-page.png', { type: 'image/png' }));
-    expect(await screen.findByText('已关联 1 张证据图片。')).toBeInTheDocument();
+    expect(await screen.findByText('新增 1 张证据图片。')).toBeInTheDocument();
     expect(fetchMock).toHaveBeenLastCalledWith(expect.stringContaining('/assets/evidence-page.png'), expect.objectContaining({ method: 'POST' }));
   });
 });
