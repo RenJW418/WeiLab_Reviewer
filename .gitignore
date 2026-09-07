@@ -1,0 +1,7 @@
+node_modules/
+frontend/dist/
+server-data/
+tmp/
+reports/leaper3-cell-2026/
+*.log
+.DS_Store

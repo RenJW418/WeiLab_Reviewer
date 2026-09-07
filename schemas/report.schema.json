@@ -1,0 +1,213 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.paper-review-audit/schemas/report.schema.json",
+  "title": "Paper Review Audit Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["meta", "scope", "papers", "materials", "claims", "evidence", "checks", "issues", "analyses", "summary", "artifacts"],
+  "properties": {
+    "meta": { "$ref": "#/$defs/meta" },
+    "scope": { "$ref": "#/$defs/scope" },
+    "papers": { "type": "array", "items": { "$ref": "#/$defs/paper" }, "minItems": 1 },
+    "materials": { "type": "array", "items": { "$ref": "#/$defs/material" } },
+    "claims": { "type": "array", "items": { "$ref": "#/$defs/claim" } },
+    "evidence": { "type": "array", "items": { "$ref": "#/$defs/evidence" } },
+    "checks": { "type": "array", "items": { "$ref": "#/$defs/check" } },
+    "issues": { "type": "array", "items": { "$ref": "#/$defs/issue" } },
+    "analyses": { "type": "array", "items": { "$ref": "#/$defs/analysis" } },
+    "summary": { "$ref": "#/$defs/summary" },
+    "artifacts": { "type": "array", "items": { "$ref": "#/$defs/artifact" } }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$" },
+    "nullableString": { "type": ["string", "null"] },
+    "stringList": { "type": "array", "items": { "type": "string" } },
+    "idList": { "type": "array", "items": { "$ref": "#/$defs/id" }, "uniqueItems": true },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "hash": { "type": ["string", "null"], "pattern": "^sha256:[a-fA-F0-9]{64}$" },
+    "meta": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "report_id", "report_revision", "run_id", "generated_at", "language", "mode", "execution_status", "data_origin", "title"],
+      "properties": {
+        "schema_version": { "const": "1.0.0" },
+        "report_id": { "$ref": "#/$defs/id" },
+        "report_revision": { "type": "integer", "minimum": 1 },
+        "revision_reason": { "$ref": "#/$defs/nullableString" },
+        "run_id": { "$ref": "#/$defs/id" },
+        "generated_at": { "$ref": "#/$defs/timestamp" },
+        "language": { "type": "string", "minLength": 2 },
+        "mode": { "enum": ["combined", "review", "audit"] },
+        "execution_status": { "enum": ["partial", "completed", "failed", "cancelled"] },
+        "data_origin": { "enum": ["real", "synthetic_demo"] },
+        "title": { "type": "string", "minLength": 1 }
+      }
+    },
+    "scope": {
+      "type": "object", "additionalProperties": false,
+      "required": ["objective", "input_scope", "paper_versions", "selected_checks", "exclusions", "limitations", "checklist_defined"],
+      "properties": {
+        "objective": { "type": "string", "minLength": 1 },
+        "input_scope": { "$ref": "#/$defs/stringList" },
+        "paper_versions": { "$ref": "#/$defs/stringList" },
+        "selected_checks": { "$ref": "#/$defs/stringList" },
+        "exclusions": { "$ref": "#/$defs/stringList" },
+        "limitations": { "$ref": "#/$defs/stringList" },
+        "checklist_defined": { "type": "boolean" }
+      }
+    },
+    "paper": {
+      "type": "object", "additionalProperties": false,
+      "required": ["paper_id", "title", "doi", "version", "publication", "version_relations"],
+      "properties": {
+        "paper_id": { "$ref": "#/$defs/id" },
+        "title": { "type": "string", "minLength": 1 },
+        "doi": { "$ref": "#/$defs/nullableString" },
+        "version": { "type": "string", "minLength": 1 },
+        "publication": {
+          "type": "object", "additionalProperties": false,
+          "required": ["venue", "published_at"],
+          "properties": { "venue": { "$ref": "#/$defs/nullableString" }, "published_at": { "type": ["string", "null"], "format": "date" } }
+        },
+        "version_relations": {
+          "type": "array",
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["relation", "paper_id", "note"],
+            "properties": { "relation": { "enum": ["preprint_of", "version_of", "corrects", "corrected_by", "reply_to"] }, "paper_id": { "$ref": "#/$defs/id" }, "note": { "$ref": "#/$defs/nullableString" } }
+          }
+        }
+      }
+    },
+    "material": {
+      "type": "object", "additionalProperties": false,
+      "required": ["material_id", "paper_id", "material_type", "source", "file_name", "sha256", "access_status", "text_read", "images_viewed", "accessed_at", "read_at", "unavailable_reason"],
+      "properties": {
+        "material_id": { "$ref": "#/$defs/id" }, "paper_id": { "$ref": "#/$defs/id" },
+        "material_type": { "enum": ["article", "supplement", "source_data", "raw_record", "code", "review_history", "historical_ai_report", "other"] },
+        "source": { "type": "string", "minLength": 1 }, "file_name": { "$ref": "#/$defs/nullableString" }, "sha256": { "$ref": "#/$defs/hash" },
+        "access_status": { "enum": ["link_found", "obtained", "unavailable", "not_sought"] },
+        "text_read": { "type": "boolean" }, "images_viewed": { "type": "boolean" },
+        "accessed_at": { "anyOf": [{ "$ref": "#/$defs/timestamp" }, { "type": "null" }] },
+        "read_at": { "anyOf": [{ "$ref": "#/$defs/timestamp" }, { "type": "null" }] },
+        "unavailable_reason": { "$ref": "#/$defs/nullableString" }
+      },
+      "allOf": [{ "if": { "properties": { "access_status": { "const": "unavailable" } } }, "then": { "properties": { "unavailable_reason": { "type": "string", "minLength": 1 } } } }]
+    },
+    "locator": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": { "enum": ["pdf", "html", "spreadsheet", "code", "text", "none"] },
+        "page": { "type": "integer", "minimum": 1 }, "figure": { "type": "string" }, "table": { "type": "string" }, "section": { "type": "string" }, "anchor": { "type": "string" },
+        "sheet": { "type": "string" }, "range": { "type": "string" }, "file": { "type": "string" }, "line_start": { "type": "integer", "minimum": 1 }, "line_end": { "type": "integer", "minimum": 1 }, "description": { "type": "string" }
+      }
+    },
+    "claim": {
+      "type": "object", "additionalProperties": false,
+      "required": ["claim_id", "paper_id", "statement", "claim_type", "supporting_evidence_ids", "contradicting_evidence_ids", "assessment", "boundaries"],
+      "properties": {
+        "claim_id": { "$ref": "#/$defs/id" }, "paper_id": { "$ref": "#/$defs/id" }, "statement": { "type": "string", "minLength": 1 },
+        "claim_type": { "enum": ["descriptive", "predictive", "causal", "mechanistic", "application", "other"] },
+        "supporting_evidence_ids": { "$ref": "#/$defs/idList" }, "contradicting_evidence_ids": { "$ref": "#/$defs/idList" },
+        "assessment": { "type": "string", "minLength": 1 }, "boundaries": { "$ref": "#/$defs/stringList" }
+      }
+    },
+    "evidence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["evidence_id", "material_id", "evidence_type", "locator", "content", "directly_verified", "run_id", "analysis_id"],
+      "properties": {
+        "evidence_id": { "$ref": "#/$defs/id" }, "material_id": { "$ref": "#/$defs/id" },
+        "evidence_type": { "enum": ["paper_text", "figure", "table", "caption", "supplement", "source_data", "raw_record", "code", "review_history", "historical_ai_report", "calculation"] },
+        "locator": { "$ref": "#/$defs/locator" }, "content": { "type": "string", "minLength": 1 }, "directly_verified": { "type": "boolean" },
+        "run_id": { "$ref": "#/$defs/id" }, "analysis_id": { "anyOf": [{ "$ref": "#/$defs/id" }, { "type": "null" }] },
+        "image_path": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}\\.(?:png|jpe?g|webp)$" }
+      }
+    },
+    "executionRecord": {
+      "type": "object", "additionalProperties": false,
+      "required": ["executed_at", "actor", "tool", "output_ref"],
+      "properties": { "executed_at": { "$ref": "#/$defs/timestamp" }, "actor": { "type": "string", "minLength": 1 }, "tool": { "type": "string", "minLength": 1 }, "output_ref": { "$ref": "#/$defs/nullableString" } }
+    },
+    "check": {
+      "type": "object", "additionalProperties": false,
+      "required": ["check_id", "paper_id", "claim_ids", "check_type", "input_evidence_ids", "method", "status", "result", "blocked_reason", "not_applicable_reason", "execution_records"],
+      "properties": {
+        "check_id": { "$ref": "#/$defs/id" }, "paper_id": { "$ref": "#/$defs/id" }, "claim_ids": { "$ref": "#/$defs/idList" }, "check_type": { "type": "string", "minLength": 1 },
+        "input_evidence_ids": { "$ref": "#/$defs/idList" }, "method": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["pass", "fail", "blocked", "not_run", "not_applicable"] }, "result": { "$ref": "#/$defs/nullableString" },
+        "blocked_reason": { "$ref": "#/$defs/nullableString" }, "not_applicable_reason": { "$ref": "#/$defs/nullableString" },
+        "execution_records": { "type": "array", "items": { "$ref": "#/$defs/executionRecord" } }
+      },
+      "allOf": [
+        { "if": { "properties": { "status": { "const": "blocked" } } }, "then": { "properties": { "blocked_reason": { "type": "string", "minLength": 1 } } } },
+        { "if": { "properties": { "status": { "const": "not_applicable" } } }, "then": { "properties": { "not_applicable_reason": { "type": "string", "minLength": 1 } } } },
+        { "if": { "properties": { "status": { "enum": ["pass", "fail"] } } }, "then": { "properties": { "execution_records": { "type": "array", "minItems": 1 }, "result": { "type": "string", "minLength": 1 } } } }
+      ]
+    },
+    "alternative": {
+      "type": "object", "additionalProperties": false,
+      "required": ["explanation", "checked", "outcome", "reason"],
+      "properties": { "explanation": { "type": "string", "minLength": 1 }, "checked": { "type": "boolean" }, "outcome": { "enum": ["supported", "not_supported", "unresolved", "not_checked"] }, "reason": { "type": "string", "minLength": 1 } }
+    },
+    "issue": {
+      "type": "object", "additionalProperties": false,
+      "required": ["issue_id", "title", "claim_ids", "author_statement", "observation", "source_description", "evidence_ids", "direct_source_read", "verification_steps", "verification_input", "verification_method", "actual_output", "published_result", "alternative_explanations", "assumptions", "missing_materials", "status", "status_reason", "evidence_strength", "evidence_strength_reason", "impact_scope", "impact_reason", "falsification_condition", "recommended_action", "script_path", "run_status", "check_ids", "analysis_ids", "resolved_version"],
+      "properties": {
+        "issue_id": { "$ref": "#/$defs/id" }, "title": { "type": "string", "minLength": 1 }, "claim_ids": { "$ref": "#/$defs/idList" },
+        "author_statement": { "type": "string", "minLength": 1 }, "observation": { "type": "string", "minLength": 1 }, "source_description": { "type": "string", "minLength": 1 },
+        "evidence_ids": { "$ref": "#/$defs/idList" }, "direct_source_read": { "type": "boolean" }, "verification_steps": { "$ref": "#/$defs/stringList" },
+        "verification_input": { "$ref": "#/$defs/nullableString" }, "verification_method": { "$ref": "#/$defs/nullableString" }, "actual_output": { "$ref": "#/$defs/nullableString" }, "published_result": { "$ref": "#/$defs/nullableString" },
+        "alternative_explanations": { "type": "array", "items": { "$ref": "#/$defs/alternative" } }, "assumptions": { "$ref": "#/$defs/stringList" }, "missing_materials": { "$ref": "#/$defs/stringList" },
+        "status": { "enum": ["confirmed", "conditional", "needs_clarification", "ruled_out", "resolved"] }, "status_reason": { "type": "string", "minLength": 1 },
+        "evidence_strength": { "enum": ["high", "medium", "low", "undetermined"] }, "evidence_strength_reason": { "type": "string", "minLength": 1 },
+        "impact_scope": { "enum": ["reporting", "local_result", "key_claim", "unknown"] }, "impact_reason": { "type": "string", "minLength": 1 },
+        "falsification_condition": { "type": "string", "minLength": 1 }, "recommended_action": { "type": "string", "minLength": 1 }, "script_path": { "$ref": "#/$defs/nullableString" },
+        "run_status": { "enum": ["executed", "not_run", "blocked", "not_applicable"] }, "check_ids": { "$ref": "#/$defs/idList" }, "analysis_ids": { "$ref": "#/$defs/idList" }, "resolved_version": { "$ref": "#/$defs/nullableString" }
+      },
+      "allOf": [{ "if": { "properties": { "status": { "const": "resolved" } } }, "then": { "properties": { "resolved_version": { "type": "string", "minLength": 1 } } } }]
+    },
+    "analysisValue": {
+      "type": "object", "additionalProperties": false,
+      "required": ["label", "value", "unit"],
+      "properties": { "label": { "type": "string" }, "value": { "type": ["number", "string", "boolean", "null"] }, "unit": { "$ref": "#/$defs/nullableString" } }
+    },
+    "analysis": {
+      "type": "object", "additionalProperties": false,
+      "required": ["analysis_id", "analysis_type", "result_kind", "bound_type", "input_description", "input_evidence_ids", "method", "parameters", "status", "outputs", "published_values", "recalculated_values", "tolerance", "script_path", "environment", "assumptions", "limitations", "execution_records"],
+      "properties": {
+        "analysis_id": { "$ref": "#/$defs/id" }, "analysis_type": { "type": "string", "minLength": 1 },
+        "result_kind": { "enum": ["original_observation", "recalculation", "conditional_bound", "scenario", "synthetic_test"] }, "bound_type": { "enum": ["upper", "lower", "none"] },
+        "input_description": { "type": "string", "minLength": 1 }, "input_evidence_ids": { "$ref": "#/$defs/idList" }, "method": { "type": "string", "minLength": 1 },
+        "parameters": { "type": "object", "additionalProperties": true }, "status": { "enum": ["executed", "not_run", "blocked", "failed"] },
+        "outputs": { "type": "array", "items": { "$ref": "#/$defs/analysisValue" } }, "published_values": { "type": "array", "items": { "$ref": "#/$defs/analysisValue" } }, "recalculated_values": { "type": "array", "items": { "$ref": "#/$defs/analysisValue" } },
+        "tolerance": { "$ref": "#/$defs/nullableString" }, "script_path": { "$ref": "#/$defs/nullableString" }, "environment": { "$ref": "#/$defs/nullableString" }, "assumptions": { "$ref": "#/$defs/stringList" }, "limitations": { "$ref": "#/$defs/stringList" },
+        "execution_records": { "type": "array", "items": { "$ref": "#/$defs/executionRecord" } }
+      },
+      "allOf": [{ "if": { "properties": { "status": { "const": "executed" } } }, "then": { "properties": { "execution_records": { "type": "array", "minItems": 1 } } } }]
+    },
+    "linkedText": {
+      "type": "object", "additionalProperties": false,
+      "required": ["text", "claim_ids", "evidence_ids"],
+      "properties": { "text": { "type": "string", "minLength": 1 }, "claim_ids": { "$ref": "#/$defs/idList" }, "evidence_ids": { "$ref": "#/$defs/idList" } }
+    },
+    "summary": {
+      "type": "object", "additionalProperties": false,
+      "required": ["scientific_question", "methods", "contributions", "strengths", "main_conclusions", "limitations", "recommendations", "research_implications"],
+      "properties": {
+        "scientific_question": { "$ref": "#/$defs/linkedText" }, "methods": { "$ref": "#/$defs/linkedText" },
+        "contributions": { "type": "array", "items": { "$ref": "#/$defs/linkedText" } }, "strengths": { "type": "array", "items": { "$ref": "#/$defs/linkedText" } },
+        "main_conclusions": { "type": "array", "items": { "$ref": "#/$defs/linkedText" } }, "limitations": { "type": "array", "items": { "$ref": "#/$defs/linkedText" } },
+        "recommendations": { "type": "array", "items": { "$ref": "#/$defs/linkedText" } }, "research_implications": { "type": "array", "items": { "$ref": "#/$defs/linkedText" } }
+      }
+    },
+    "artifact": {
+      "type": "object", "additionalProperties": false,
+      "required": ["artifact_id", "purpose", "path", "media_type", "sha256", "material_ids", "analysis_ids"],
+      "properties": {
+        "artifact_id": { "$ref": "#/$defs/id" }, "purpose": { "type": "string", "minLength": 1 },
+        "path": { "type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?![A-Za-z]:)[^\\u0000]+$" }, "media_type": { "type": "string", "pattern": "^[^/]+/[^/]+$" }, "sha256": { "$ref": "#/$defs/hash" },
+        "material_ids": { "$ref": "#/$defs/idList" }, "analysis_ids": { "$ref": "#/$defs/idList" }
+      }
+    }
+  }
+}

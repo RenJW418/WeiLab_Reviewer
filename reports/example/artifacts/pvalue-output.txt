@@ -1,0 +1,8 @@
+Synthetic demo output (not an observation from a real paper):
+
+effect=12
+standard_error=6.087
+z=1.971414489896501
+two_sided_p=0.04867634658558062
+
+Regenerate with: node reports/example/artifacts/recalculate-pvalue.mjs

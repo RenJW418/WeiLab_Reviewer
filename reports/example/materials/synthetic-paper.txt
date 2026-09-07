@@ -1,0 +1,16 @@
+ANONYMOUS SYNTHETIC MATERIAL — NOT A REAL PAPER
+
+[Abstract]
+At week 8, intervention A reduced outcome Y. The adjusted between-group difference was 18 units (P=0.049).
+
+[Results — Table 2]
+Week 8 adjusted between-group difference: 12 units. P=0.049.
+
+[Figure 2 legend]
+Intervention A is green and control is gray; the labels follow Table 2.
+
+[Missing data]
+Forty participants were randomized. The safety set excluded two participants without any follow-up record; its denominator was 38.
+
+[Methods]
+The synthetic example reports multiple measurements and does not provide the animal-to-measurement identity map.

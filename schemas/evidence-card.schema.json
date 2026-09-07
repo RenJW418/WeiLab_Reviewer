@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.paper-review-audit/schemas/evidence-card.schema.json",
+  "title": "Evidence card (embedded issue contract)",
+  "description": "The canonical issue/evidence-card definition is $defs.issue in report.schema.json.",
+  "$ref": "report.schema.json#/$defs/issue"
+}
