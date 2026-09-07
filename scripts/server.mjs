@@ -101,7 +101,7 @@ async function listReports(user) {
     try {
       const report = JSON.parse(await readFile(join(directory, file), 'utf8'));
       const result = validateReport(report);
-      if (result.valid) reports.push({ report_id: report.meta.report_id, report_revision: report.meta.report_revision, title: report.meta.title, generated_at: report.meta.generated_at, execution_status: report.meta.execution_status, data_origin: report.meta.data_origin, papers: report.papers.map(paper => ({ paper_id: paper.paper_id, title: paper.title, version: paper.version })) });
+      if (result.valid) reports.push({ report_id: report.meta.report_id, report_revision: report.meta.report_revision, title: report.meta.title, generated_at: report.meta.generated_at, execution_status: report.meta.execution_status, data_origin: report.meta.data_origin, current_issue_count: report.issues.filter(issue => !['ruled_out', 'resolved'].includes(issue.status)).length, total_issue_count: report.issues.length, evidence_count: report.evidence.length, papers: report.papers.map(paper => ({ paper_id: paper.paper_id, title: paper.title, version: paper.version })) });
     } catch { /* Invalid files are never advertised. */ }
   }
   return reports.sort((a, b) => b.generated_at.localeCompare(a.generated_at));

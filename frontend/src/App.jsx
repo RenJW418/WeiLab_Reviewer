@@ -74,7 +74,7 @@ export default function App() {
     return () => { cancelled = true; };
   }, []);
 
-  useEffect(() => { if (user) refreshReports({ openLatest: true }); }, [user?.user_id]);
+  useEffect(() => { if (user) refreshReports(); }, [user?.user_id]);
 
   const submitAuth = async event => {
     event.preventDefault(); setError(''); setNotice('');
@@ -190,9 +190,9 @@ export default function App() {
 
   return <div className="site-shell">
     <header className="document-nav"><div className="nav-inner">
-      <a className="wordmark" href="/" aria-label="论文核查报告首页"><span className="wordmark-mark">核</span><span>论文核查报告</span></a>
+      <a className="wordmark" href="/" aria-label="返回审阅控制台" onClick={event => { event.preventDefault(); setReport(null); setOpenIssueId(null); setError(''); setNotice(''); }}><span className="wordmark-mark">核</span><span>论文核查报告</span></a>
       <div className="account-actions">
-        {reports.length > 0 && <select aria-label="我的报告" value={report ? `${report.meta.report_id}::${report.meta.report_revision}` : ''} onChange={event => { const [reportId, revision] = event.target.value.split('::'); const selected = reports.find(item => item.report_id === reportId && item.report_revision === Number(revision)); if (selected) loadReport(selected); }}><option value="" disabled>我的报告</option>{reports.map(item => <option key={`${item.report_id}-${item.report_revision}`} value={`${item.report_id}::${item.report_revision}`}>{item.title} · r{item.report_revision}</option>)}</select>}
+        {report && <button className="logout-action console-link" onClick={() => { setReport(null); setOpenIssueId(null); setError(''); setNotice(''); }}>全部报告</button>}
         <button className="quiet-action" onClick={() => fileRef.current?.click()} disabled={uploading} aria-busy={uploading}>{uploading ? '正在上传…' : '上传报告包'}</button>
         <input ref={fileRef} className="sr-only" aria-label="上传报告包" type="file" accept="application/zip,.zip,application/json,.json,image/png,image/jpeg,image/webp" multiple onChange={importReport} />
         {report && <><button className="quiet-action" onClick={() => evidenceRef.current?.click()} disabled={uploading}>补充证据图片</button><input ref={evidenceRef} className="sr-only" aria-label="补充证据图片" type="file" accept="image/png,image/jpeg,image/webp" multiple onChange={addEvidenceImages} /></>}
@@ -204,10 +204,23 @@ export default function App() {
       {notice && <p className="save-notice" role="status">{notice}</p>}
       {error && <p className="inline-error" role="alert">{error}</p>}
       {loadingReport && <div className="state-card"><span className="loading-dot" />正在读取报告…</div>}
-      {!loadingReport && !report && <div className="empty-library"><div className="eyebrow">MY REPORTS</div><h1>还没有保存的报告</h1><p>选择 review-package.zip，即可一次上传报告、可读版本和全部证据截图。</p><button className="primary-action" onClick={() => fileRef.current?.click()}>上传第一份报告</button></div>}
+      {!loadingReport && !report && <ReportDashboard reports={reports} onOpen={loadReport} onUpload={() => fileRef.current?.click()} />}
       {!loadingReport && report && <ReportView report={report} issues={issues} evidenceById={evidenceById} materialById={materialById} openIssueId={openIssueId} setOpenIssueId={setOpenIssueId} />}
     </main>
   </div>;
+}
+
+function ReportDashboard({ reports, onOpen, onUpload }) {
+  if (!reports.length) return <div className="empty-library"><div className="eyebrow">REVIEW CONSOLE</div><h1>还没有保存的报告</h1><p>选择 review-package.zip，即可一次上传报告、可读版本和全部证据截图。</p><button className="primary-action" onClick={onUpload}>上传第一份报告</button></div>;
+  return <section className="review-console" aria-labelledby="console-title">
+    <header className="console-intro"><div><div className="eyebrow">REVIEW CONSOLE</div><h1 id="console-title">我的审阅结果</h1><p>所有已提交的文章都保存在这里。选择一篇查看问题、证据截图与核查细节。</p></div><div className="console-count"><strong>{reports.length}</strong><span>份报告</span></div></header>
+    <div className="report-ledger">{reports.map((item, index) => <button className="report-entry" key={`${item.report_id}-${item.report_revision}`} onClick={() => onOpen(item)}>
+      <span className="report-entry-index">{String(index + 1).padStart(2, '0')}</span>
+      <span className="report-entry-main"><strong>{item.papers?.[0]?.title || item.title}</strong><span>{item.title}</span><span className="report-entry-meta"><i>{item.papers?.[0]?.version || '版本未注明'}</i><i>revision {item.report_revision}</i><i>{item.generated_at?.slice(0, 10)}</i></span></span>
+      <span className="report-entry-findings"><strong>{item.current_issue_count ?? '—'}</strong><span>当前问题</span></span>
+      <span className="report-entry-arrow" aria-hidden="true">→</span>
+    </button>)}</div>
+  </section>;
 }
 
 function ReportView({ report, issues, evidenceById, materialById, openIssueId, setOpenIssueId }) {

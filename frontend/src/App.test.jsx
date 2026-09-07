@@ -8,10 +8,12 @@ import App from './App.jsx';
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
+const reportDescriptor = value => ({ report_id: value.meta.report_id, report_revision: value.meta.report_revision, title: value.meta.title, generated_at: value.meta.generated_at, current_issue_count: value.issues.filter(issue => !['ruled_out', 'resolved'].includes(issue.status)).length, papers: value.papers.map(paper => ({ title: paper.title, version: paper.version })) });
 const mockServerReport = value => vi.stubGlobal('fetch', vi.fn()
   .mockResolvedValueOnce({ ok: true, json: async () => ({ authenticated: true, user: { user_id: 'U-1', name: '测试用户' } }) })
-  .mockResolvedValueOnce({ ok: true, json: async () => ({ reports: [{ report_id: value.meta.report_id, report_revision: value.meta.report_revision }] }) })
+  .mockResolvedValueOnce({ ok: true, json: async () => ({ reports: [reportDescriptor(value)] }) })
   .mockResolvedValueOnce({ ok: true, json: async () => structuredClone(value) }));
+const openReport = async value => userEvent.click(await screen.findByRole('button', { name: new RegExp(value.papers[0].title) }));
 
 describe('reader-facing issue list', () => {
   it('requires login before any report is visible', async () => {
@@ -23,9 +25,12 @@ describe('reader-facing issue list', () => {
     expect(screen.queryByRole('heading', { name: '发现的问题' })).not.toBeInTheDocument();
   });
 
-  it('loads the newest server report without workbench navigation or demo labels', async () => {
+  it('shows the report console first and opens details only after selection', async () => {
     mockServerReport(report);
     render(<App />);
+    expect(await screen.findByRole('heading', { name: '我的审阅结果' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '发现的问题' })).not.toBeInTheDocument();
+    await openReport(report);
     expect(await screen.findByRole('heading', { level: 1, name: report.papers[0].title })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '发现的问题' })).toBeInTheDocument();
     expect(screen.queryByText('总览')).not.toBeInTheDocument();
@@ -36,6 +41,7 @@ describe('reader-facing issue list', () => {
   it('lists current issues and expands evidence and details inline', async () => {
     mockServerReport(report);
     render(<App />);
+    await openReport(report);
     const issueButton = await screen.findByRole('button', { name: /摘要效应量与 Table 2 不一致/ });
     expect(issueButton).toHaveAttribute('aria-expanded', 'false');
     await userEvent.click(issueButton);
@@ -51,6 +57,7 @@ describe('reader-facing issue list', () => {
     reportWithImage.evidence.find(item => item.evidence_id === 'E-ABSTRACT-1').image_path = 'abstract-page.png';
     mockServerReport(reportWithImage);
     render(<App />);
+    await openReport(reportWithImage);
     await userEvent.click(await screen.findByRole('button', { name: /摘要效应量与 Table 2 不一致/ }));
     const image = screen.getByRole('img', { name: /摘要报告第 8 周组间差为 18 个单位/ });
     expect(image).toHaveAttribute('src', expect.stringContaining('/assets/abstract-page.png'));
@@ -59,6 +66,7 @@ describe('reader-facing issue list', () => {
   it('does not present ruled-out or resolved records as current issues', async () => {
     mockServerReport(report);
     render(<App />);
+    await openReport(report);
     await screen.findByRole('heading', { level: 1, name: report.papers[0].title });
     expect(screen.queryByRole('button', { name: /安全性分母差异可由缺失值规则解释/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /旧稿组别颜色问题已在 v1.0 解决/ })).not.toBeInTheDocument();
@@ -69,7 +77,7 @@ describe('reader-facing issue list', () => {
       .mockResolvedValueOnce({ ok: true, json: async () => ({ authenticated: true, user: { user_id: 'U-1', name: '测试用户' } }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ reports: [] }) })
       .mockResolvedValueOnce({ ok: true, status: 201, json: async () => ({ ok: true }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ reports: [{ report_id: report.meta.report_id, report_revision: report.meta.report_revision }] }) });
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ reports: [reportDescriptor(report)] }) });
     vi.stubGlobal('fetch', fetchMock);
     render(<App />);
     const input = await screen.findByLabelText('上传报告包');
@@ -91,7 +99,7 @@ describe('reader-facing issue list', () => {
       .mockResolvedValueOnce({ ok: true, json: async () => ({ reports: [] }) })
       .mockResolvedValueOnce({ ok: true, status: 201, json: async () => ({ ok: true }) })
       .mockResolvedValueOnce({ ok: true, status: 201, json: async () => ({ ok: true }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ reports: [{ report_id: report.meta.report_id, report_revision: report.meta.report_revision }] }) });
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ reports: [reportDescriptor(report)] }) });
     vi.stubGlobal('fetch', fetchMock);
     render(<App />);
     const input = await screen.findByLabelText('上传报告包');
@@ -105,11 +113,12 @@ describe('reader-facing issue list', () => {
     reportWithImage.evidence[0].image_path = 'evidence-page.png';
     const fetchMock = vi.fn()
       .mockResolvedValueOnce({ ok: true, json: async () => ({ authenticated: true, user: { user_id: 'U-1', name: '测试用户' } }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ reports: [{ report_id: report.meta.report_id, report_revision: report.meta.report_revision }] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ reports: [reportDescriptor(reportWithImage)] }) })
       .mockResolvedValueOnce({ ok: true, json: async () => reportWithImage })
       .mockResolvedValueOnce({ ok: true, status: 201, json: async () => ({ ok: true }) });
     vi.stubGlobal('fetch', fetchMock);
     render(<App />);
+    await openReport(reportWithImage);
     const input = await screen.findByLabelText('补充证据图片');
     await userEvent.upload(input, new File(['image'], 'evidence-page.png', { type: 'image/png' }));
     expect(await screen.findByText('新增 1 张证据图片。')).toBeInTheDocument();

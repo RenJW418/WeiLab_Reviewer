@@ -24,6 +24,7 @@ button:focus-visible, a:focus-visible { outline: 3px solid #86af9c; outline-offs
 .account-name { padding-left: 4px; color: var(--green-deep); font: 700 11px/1.4 var(--font-mono); }
 .logout-action { border: 0; padding: 6px 0; background: transparent; color: var(--ink-faint); font-size: 12px; }
 .logout-action:hover { color: var(--brick); }
+.console-link { color: var(--green-deep); }
 .page-wrap { width: min(960px, calc(100% - 44px)); margin: 0 auto; padding: 64px 0 80px; }
 .report-intro { padding-bottom: 42px; border-bottom: 1px solid var(--line-strong); }
 .eyebrow { display: flex; align-items: center; gap: 8px; color: var(--green-deep); font: 700 11px/1.4 var(--font-mono); letter-spacing: .14em; }
@@ -100,6 +101,26 @@ button:focus-visible, a:focus-visible { outline: 3px solid #86af9c; outline-offs
 .empty-library { min-height: 60vh; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; max-width: 650px; }
 .empty-library h1 { margin: 14px 0 8px; font-family: var(--font-display); font-size: clamp(2rem,4vw,3rem); }
 .empty-library p { margin: 0 0 24px; color: var(--ink-soft); }
+.review-console { padding-top: 6px; }
+.console-intro { display: flex; justify-content: space-between; align-items: end; gap: 40px; padding-bottom: 38px; border-bottom: 1px solid var(--line-strong); }
+.console-intro h1 { margin: 13px 0 8px; font-family: var(--font-display); font-size: clamp(2.2rem,4vw,3.2rem); font-weight: 600; line-height: 1.2; letter-spacing: -.025em; }
+.console-intro p { max-width: 620px; margin: 0; color: var(--ink-soft); }
+.console-count { flex: 0 0 auto; display: grid; justify-items: end; color: var(--ink-faint); font: 11px/1.4 var(--font-mono); }
+.console-count strong { color: var(--green-deep); font: 500 42px/1 var(--font-display); }
+.report-ledger { border-bottom: 1px solid var(--line-strong); }
+.report-entry { width: 100%; display: grid; grid-template-columns: 48px minmax(0,1fr) 86px 24px; gap: 20px; align-items: center; padding: 24px 8px; border: 0; border-top: 1px solid var(--line); background: transparent; color: var(--ink); text-align: left; transition: background .15s,border-color .15s; }
+.report-entry:first-child { border-top: 0; }
+.report-entry:hover { background: var(--paper-raised); }
+.report-entry-index { color: var(--ink-faint); font: 11px/1 var(--font-mono); }
+.report-entry-main { min-width: 0; display: grid; gap: 5px; }
+.report-entry-main > strong { overflow: hidden; font-family: var(--font-display); font-size: 19px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.report-entry-main > span:not(.report-entry-meta) { overflow: hidden; color: var(--ink-soft); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.report-entry-meta { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 3px; color: var(--ink-faint); font: 10.5px/1.5 var(--font-mono); }
+.report-entry-meta i { font-style: normal; }
+.report-entry-findings { display: grid; justify-items: end; color: var(--ink-faint); font: 10px/1.4 var(--font-mono); }
+.report-entry-findings strong { color: var(--brick); font: 500 25px/1.1 var(--font-display); }
+.report-entry-arrow { color: var(--green-deep); font: 20px/1 var(--font-mono); transition: transform .15s; }
+.report-entry:hover .report-entry-arrow { transform: translateX(3px); }
 .report-footer { display: flex; justify-content: space-between; gap: 20px; margin-top: 42px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--ink-faint); font: 10.5px/1.5 var(--font-mono); }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 @media (max-width: 720px) {
@@ -117,4 +138,7 @@ button:focus-visible, a:focus-visible { outline: 3px solid #86af9c; outline-offs
   .account-actions select { display: none; }
   .account-name { display: none; }
   .wordmark > span:last-child { display: none; }
+  .console-intro { align-items: start; } .console-count { display: none; }
+  .report-entry { grid-template-columns: 30px minmax(0,1fr) 22px; gap: 11px; padding: 20px 2px; }
+  .report-entry-findings { display: none; } .report-entry-main > strong { font-size: 17px; white-space: normal; }
 }
