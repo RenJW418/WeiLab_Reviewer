@@ -225,7 +225,7 @@ function PrivacyNotice({ onConfirm }) {
       <div>
         <div className="eyebrow">使用提示</div>
         <h2 id="privacy-notice-title">未发表文章请谨慎上传</h2>
-        <p id="privacy-notice-description">未发表的文章结果不建议放在网站上，直接让 GPT / Claude 解读这个报告，自己查看即可。</p>
+        <p id="privacy-notice-description">未发表的文章审查结果不要放在网站上，直接让 GPT/Claude 解读这个报告，自己看即可。</p>
         <button className="primary-action" type="button" autoFocus onClick={onConfirm}>我知道了</button>
       </div>
     </section>

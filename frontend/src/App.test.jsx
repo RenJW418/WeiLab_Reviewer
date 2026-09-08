@@ -20,8 +20,8 @@ describe('reader-facing issue list', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ authenticated: false }) }));
     render(<App />);
     const dialog = screen.getByRole('dialog', { name: '未发表文章请谨慎上传' });
-    expect(dialog).toHaveTextContent('未发表的文章结果不建议放在网站上');
-    expect(dialog).toHaveTextContent('直接让 GPT / Claude 解读这个报告');
+    expect(dialog).toHaveTextContent('未发表的文章审查结果不要放在网站上');
+    expect(dialog).toHaveTextContent('直接让 GPT/Claude 解读这个报告');
     await userEvent.click(screen.getByRole('button', { name: '我知道了' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
