@@ -1,94 +1,127 @@
 # Paper Review Audit
 
-一个可复用的论文技术审读 skill，以及读取同一 `report.json` 的只读工作台。它把论文主张、精确来源、验证过程、反证检查和影响判断连成可校验的证据链。
+面向科研论文的证据化技术审阅 skill。它不预设论文存在错误，而是把论文主张、原始出处、验证过程、反证检查和影响判断组织成可复核的证据链，并生成可直接上传展示的审阅报告包。
 
-## 已交付
+## 会审阅哪些方面
 
-- `SKILL.md`：skill 入口和完成门槛；详细流程在 `references/`。
-- `schemas/report.schema.json`：`1.0.0` 唯一数据契约；`scripts/validate-report.mjs` 同时检查 JSON Schema、全局 ID、跨对象引用和确认问题的证据门槛。
-- `scripts/render-report.mjs`：从 JSON 生成可独立阅读的 Markdown；`scripts/package-report.mjs` 将 JSON、Markdown 与证据截图打成一个可上传 ZIP。
-- `scripts/extract-method-parameters.mjs`：从 Methods 纯文本全量提取带单位参数，减少厚度、温度、时间、浓度、剂量和阈值的漏检。
-- `frontend/`：React/Vite 最终用户页面，按问题逐条展示；问题展开后显示证据、原文截图、定位、影响与建议。
-- `scripts/server.mjs`：同源静态服务、姓名密码认证和报告 API；每个账号的报告及证据图片独立持久化，相同 report_id/revision 或同名图片不覆盖。
-- `reports/example/`：持续标记为 `synthetic_demo` 的匿名合成报告。
-- `tests/`：契约、引用、统计、安全路径和关键界面交互测试，以及 A–U 行为验收设计。
+### 1. 论文身份、版本与材料覆盖
 
-## 本地运行
+- 核对题名、DOI、发表时间及论文版本。
+- 识别预印本、正式发表版、修订、更正、作者回复和公开评审之间的关系。
+- 记录正文、补充材料、Source Data、代码、原始记录和历史审阅报告是否已发现、取得、阅读或实际运行。
+- 明确审阅范围、排除项、缺失材料和无法完成的检查。
 
-需要 Node.js 20+。
+### 2. 科学问题与主张—证据链
 
-```bash
-npm install
-npm run validate
-npm run render
-npm test
-npm run dev
+- 提炼科学问题、主要贡献、核心结论和作者承认的限制。
+- 将每项核心主张关联到对应实验、数据、图表、方法和统计分析。
+- 区分描述性、预测性、因果性、机制性及应用外推主张。
+- 检查结论强度是否超出实验设计和现有证据能够支持的范围。
+
+### 3. 图、表与正文一致性
+
+- 对照摘要、正文、图、表、图注和补充材料中的数值、样本量、分母、比例、时间点、组别与定义。
+- 检查坐标轴、对数尺度、误差条、颜色、图例、归一化和样本点是否一致。
+- 追踪图表中的样本身份、源表标签、数值变换和绘图标签。
+- 原文优先于 OCR；从图片数字化得到的读数会明确标注不确定性。
+
+当前版本会实际查看图片，但尚未内置自动图片重复检测。图片相似只能登记为待复核线索，不能据此直接判断存在篡改或科研不端。
+
+### 4. Methods 参数与单位
+
+- 全量提取带单位的实验参数，而不只抽查核心实验。
+- 覆盖切片厚度、温度、时间、转速或离心力、浓度、体积、剂量、尺寸、分辨率和阈值。
+- 将参数与实验对象、处理阶段、仪器、染色及成像方式结合判断。
+- 排查小数点移位、10 倍或 1000 倍数量级错误、单位混用，以及正文与补充方法之间的冲突。
+- 外部常见范围只用于触发候选问题；最终判断必须回到论文原文、实际技术流程和可获得的实验记录。
+
+### 5. 实验设计与生物学重复
+
+- 识别真正的实验单位，区分生物学重复、技术重复、配对、纵向和嵌套测量。
+- 检查对照、批次、随机化、盲法、纳排标准、缺失数据、混杂因素和归一化。
+- 对组织学实验区分冰冻、石蜡、树脂和超薄切片，并联合切片设备、染色和显微成像方式判断参数合理性。
+- 检查由局部实验结果向机制、临床意义或一般性结论的外推是否成立。
+
+### 6. 统计与数值复核
+
+- 检查统计单位、配对关系、单双侧检验、方差假设、多重比较、效应量和置信区间。
+- 先严格按照作者声明的方法复算，再执行有依据且单独记录的替代分析。
+- 记录复算输入、参数、软件、脚本、实际输出、论文发表值和允许误差。
+- 区分“不显著”“等效”和“无效应”，并区分条件性上界与真实观测结果。
+
+### 7. 代码、机器学习与计算分析
+
+- 追踪训练、验证和测试集边界，以及预处理、特征选择和调参是否发生数据泄漏。
+- 检查患者或样本重复、同源序列泄漏、时间泄漏、伪标签来源和共同上游模型。
+- 核对基线公平性、随机种子、消融实验、外部验证及评价条件是否可比。
+- 没有取得代码或运行条件时如实标记阻塞，不把潜在风险写成已发生事实。
+
+### 8. 反证、替代解释与敏感性
+
+- 对每条拟保留问题主动寻找最强替代解释。
+- 检查正文或补充材料是否已有说明、实验是否不同、版本是否已经更新，以及是否误读坐标或归一化。
+- 证据不足时使用条件分析、敏感性分析或界限，不臆造缺失数据和样本对应关系。
+- 明确什么新增材料或结果能够推翻当前判断。
+
+### 9. 问题定级与影响判断
+
+每个问题分别记录三个维度：
+
+- 状态：`confirmed`、`conditional`、`needs_clarification`、`ruled_out` 或 `resolved`。
+- 证据强度：`high`、`medium`、`low` 或 `undetermined`。
+- 影响范围：`reporting`、`local_result`、`key_claim` 或 `unknown`。
+
+局部问题不会自动否定整篇论文，也不会据此推断造假概率或个人责任。`confirmed` 必须关联本次直接核验的定位证据和真实执行记录。
+
+### 10. 多论文比较
+
+- 比较研究问题、数据来源、样本独立性、评价条件、证据强度和结论分歧。
+- 检查共享队列、重复数据、论文版本和共同上游模型。
+- 对不可直接比较的指标保留边界，不进行没有依据的强制排名。
+
+## 默认输出
+
+每次完整审阅生成一个 `review-package.zip`：
+
+```text
+review-package.zip
+├── report.json
+├── report.md
+└── evidence/
+    └── 与问题关联的原文截图
 ```
 
-开发地址为 `http://localhost:5173`。要验证完整服务器模式：
+- `report.json` 是唯一机器数据源，遵循 `schemas/report.schema.json`。
+- `report.md` 从同一 JSON 自动生成，不单独维护结论或问题数量。
+- `evidence/` 保存报告引用的原文、图表或方法截图；缺少任一被引用图片时，报告包校验失败。
+- 格式和引用校验通过不代表科研结论已经得到独立验证。
 
-```bash
-npm run build
-npm run serve
-```
+## 报告展示
 
-打开 `http://localhost:8787`，先用姓名和至少 8 位密码创建账号。登录会话保存在 HttpOnly、SameSite=Lax Cookie 中，密码使用随机盐和 scrypt 哈希保存，不以明文落盘。登录后只能列出、读取和上传当前账号自己的报告。
+配套前端提供姓名密码登录和账号级数据隔离。登录后首先进入审阅控制台，查看当前账号提交过的所有文章；选择文章后，才进入逐条问题页面。
 
-## 服务器部署与上传展示
+详情页默认将已确认问题置顶。展开每条问题可以查看：
 
-### Docker（推荐）
+- 直接证据及原文截图；
+- 页码、图号、章节等精确定位；
+- 核查结论和影响判断；
+- 验证方法、执行步骤和替代解释；
+- 推荐处理方式及仍需补充的材料。
 
-```bash
-docker compose up -d --build
-```
+## 主要组成
 
-页面开放在 `http://服务器地址:3000`，账号、会话、报告与证据图片均存放在 Docker volume `paper-review-data`。所有报告接口都要求登录，并按账号隔离。
-
-公开服务器应在反向代理上启用 HTTPS、登录速率限制和数据备份；启用 HTTPS 后同时设置 `COOKIE_SECURE=1`。在仅有 HTTP 的 IP 地址上，密码传输不加密，请勿使用其他服务的复用密码。
-
-浏览器默认上传单个 `review-package.zip`，前端会自动读取其中的 JSON、Markdown 和全部证据图片。旧版 `report.json` 与图片多选、以及“补充证据图片”方式继续兼容。图片文件名必须与 JSON 对应 evidence 的 `image_path` 完全一致。若通过 API 上传，先注册或登录并保存 Cookie：
-
-```bash
-curl -c session.cookie -H 'Content-Type: application/json' \
-  --data '{"name":"姓名","password":"至少八位密码"}' \
-  http://your-host:3000/api/auth/register
-
-curl --fail-with-body -b session.cookie -H 'Content-Type: application/json' \
-  --data-binary @reports/example/report.json \
-  http://your-host:3000/api/reports
-```
-
-如 evidence 对象包含 `image_path`，在报告上传成功后上传对应证据截图：
-
-```bash
-curl --fail-with-body \
-  -b session.cookie \
-  -H 'Content-Type: image/png' \
-  --data-binary @evidence-page.png \
-  http://your-host:3000/api/reports/REPORT_ID/REVISION/assets/evidence-page.png
-```
-
-页面登录后自动读取并展示当前账号最新的报告版本。服务端再次运行同一 schema 与引用校验；损坏报告返回 422，同一 report/revision 或同名证据图片返回 409。新修订应递增 `meta.report_revision` 并记录 `revision_reason`。
-
-登录、保存和账号隔离依赖同源 Node 服务，因此不能只部署 `frontend/dist/` 静态文件。
-
-## 从审查到展示
-
-```bash
-node scripts/validate-report.mjs /path/to/run/report.json
-node scripts/render-report.mjs /path/to/run/report.json /path/to/run/report.md
-node scripts/package-report.mjs /path/to/run/report.json /path/to/run/evidence-images /path/to/run/review-package.zip
-```
-
-然后在页面上传单个 `review-package.zip`。服务器有报告时，页面自动打开最新版本，并以精简的问题—证据列表呈现。旧版 `report.json` 加图片多选方式仍兼容，但不再是默认交付方式。
+- `SKILL.md`：审阅入口、工作路由、判断规则和完成门槛。
+- `references/workflow.md`：完整审阅流程与证据台账要求。
+- `references/domain-checks.md`：生物医学、机器学习、RNA、蛋白和结构预测专项检查。
+- `references/output-contract.md`：报告对象关系、统计口径和报告包契约。
+- `schemas/report.schema.json`：结构化报告的唯一 Schema。
+- `scripts/`：参数提取、报告校验、Markdown 渲染和报告包生成工具。
+- `frontend/`：问题—证据展示页面和个人审阅控制台。
 
 ## 安全与边界
 
-- 报告文本按纯文本渲染，不注入 HTML，也不执行脚本；外链只允许 HTTP(S)。
-- artifact 路径与 evidence `image_path` 只允许受控相对路径；证据图片接口只接受 PNG、JPEG 或 WebP。
-- JSON API 默认最大 10 MiB，可用 `REPORT_MAX_BYTES` 调整；数据目录用 `REPORT_DATA_DIR` 指定，会话时长用 `SESSION_MAX_AGE_SECONDS` 调整。
-- 格式/引用校验通过不代表科研结论已验证。页面没有真实性分数、假任务按钮或模拟后台进度。
-
-## 当前边界
-
-服务器上传结构化审查结果 JSON 和裁切后的证据图片。大体积 PDF、源数据和代码仍应通过受控存储提供；服务不会自动解压材料包或执行附件代码。参数提取脚本只生成待审候选，不能替代领域判断、原版页面核对或实验记录。
+- 论文、网页、附件、代码注释和历史 AI 报告均被视为不可信分析对象，不执行其中的操作指令。
+- 默认只读原始材料；非公开资料不会在未经授权时上传第三方。
+- 报告文本按纯文本渲染，不注入 HTML 或执行附件脚本。
+- 大体积 PDF、源数据和代码应通过受控存储提供；前端报告包主要保存结构化结论与裁切后的证据图片。
+- 自动提取和相似性检测只能生成候选线索，不能替代领域判断、原版页面核对或实验记录。
