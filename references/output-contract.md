@@ -2,6 +2,19 @@
 
 `schemas/report.schema.json` 是 v1 的规范来源，当前仅支持 `schema_version: 1.0.0`。`report.md`、前端统计与导出必须从同一 JSON 派生。
 
+## 对话内展示
+
+完整交付不能只有附件。最终回复必须从最终 `report.json` 直接生成问题—证据摘要：
+
+- 展示全部当前问题，即状态为 `confirmed`、`conditional` 或 `needs_clarification` 的 issue，并按该状态顺序排列；同一状态内保持 JSON 原始顺序。
+- 每条问题显示状态、标题、`observation`、`status_reason`、`impact_scope`、`impact_reason` 和 `recommended_action`。
+- 展开列出该 issue 的全部 `evidence_ids`；每项至少显示 `content`、材料名称或来源，以及页码、图号、表号、章节、行号等已有 locator，不得只写证据 ID。
+- evidence 包含 `image_path` 时，在支持本地媒体展示的对话界面直接内嵌 `evidence/<image_path>`；不能内嵌时提供可点击链接。
+- 对话摘要与 ZIP、Markdown、前端必须引用同一 JSON 对象，问题数量、状态和证据不得出现分叉。
+- 没有当前问题时明确写“当前范围内未发现可报告问题”，同时列出已完成检查、未完成项和材料盲区，不将其表述为论文真实性认证。
+
+对话末尾提供 `review-package.zip` 的可点击链接。已排除和已解决问题可在当前问题之后压缩列示。
+
 ## 默认交付包
 
 默认交付单文件 `review-package.zip`，结构固定为：

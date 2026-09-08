@@ -33,7 +33,12 @@ description: 审读一篇或多篇科研论文，建立主张—证据链，复�
 
 ## 完成门槛
 
-每次输出至少包含一个可直接上传的 `review-package.zip`，包内必须有 `report.json`、由其生成的 `report.md`，以及 `report.json` 引用的全部证据截图。`report.json` 仍是唯一机器数据源，不把图片转成 base64 塞入 JSON。完成前运行：
+每次输出必须同时完成两种交付：
+
+1. 在当前对话中直接展示全部当前问题及其对应证据，不能只让用户下载文件查看。按 `confirmed`、`conditional`、`needs_clarification` 排序；每条至少显示问题状态与标题、观察、逐项证据内容与精确定位、判断理由、影响和建议。已有证据截图且当前界面支持图片时直接内嵌；否则提供可点击文件链接。对话内容必须从最终 `report.json` 提取，不另写一套结论。
+2. 提供一个可直接上传的 `review-package.zip`，包内必须有 `report.json`、由其生成的 `report.md`，以及 `report.json` 引用的全部证据截图。`report.json` 仍是唯一机器数据源，不把图片转成 base64 塞入 JSON。
+
+没有当前问题时，也必须在对话中明确说明，并列出实际完成的检查、限制和盲区。已排除或已解决的问题可单列简述，不与当前问题混排。完成前运行：
 
 ```bash
 node scripts/validate-report.mjs <output/report.json>
@@ -41,7 +46,7 @@ node scripts/render-report.mjs <output/report.json> <output/report.md>
 node scripts/package-report.mjs <output/report.json> <output/evidence-images> <output/review-package.zip>
 ```
 
-报告包固定结构为根目录 `report.json`、`report.md` 和 `evidence/<image_path>`。打包脚本遇到任一缺图即失败；交付前必须用同一脚本成功生成报告包。
+报告包固定结构为根目录 `report.json`、`report.md` 和 `evidence/<image_path>`。打包脚本遇到任一缺图即失败；交付前必须用同一脚本成功生成报告包。最终回复同时给出报告包的可点击链接。
 
 只有限定范围内必需检查均完成时，`meta.execution_status` 才可为 `completed`。如未取得全文、读图、计算或关键附件，如实标为 `partial`/`blocked`/`not_run`。不得把格式校验通过表述为科学结论已验证。
 
