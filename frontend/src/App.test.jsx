@@ -16,6 +16,16 @@ const mockServerReport = value => vi.stubGlobal('fetch', vi.fn()
 const openReport = async value => userEvent.click(await screen.findByRole('button', { name: new RegExp(value.papers[0].title) }));
 
 describe('reader-facing issue list', () => {
+  it('shows the unpublished-work warning on every fresh page load', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ authenticated: false }) }));
+    render(<App />);
+    const dialog = screen.getByRole('dialog', { name: '未发表文章请谨慎上传' });
+    expect(dialog).toHaveTextContent('未发表的文章结果不建议放在网站上');
+    expect(dialog).toHaveTextContent('直接让 GPT / Claude 解读这个报告');
+    await userEvent.click(screen.getByRole('button', { name: '我知道了' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
   it('requires login before any report is visible', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ authenticated: false }) }));
     render(<App />);

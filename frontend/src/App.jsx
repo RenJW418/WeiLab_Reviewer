@@ -25,6 +25,7 @@ const readBinaryFile = file => typeof file.arrayBuffer === 'function'
 const imageMime = name => name.toLowerCase().endsWith('.png') ? 'image/png' : name.toLowerCase().endsWith('.webp') ? 'image/webp' : 'image/jpeg';
 
 export default function App() {
+  const [showPrivacyNotice, setShowPrivacyNotice] = useState(true);
   const [user, setUser] = useState(undefined);
   const [authMode, setAuthMode] = useState('login');
   const [name, setName] = useState('');
@@ -177,9 +178,11 @@ export default function App() {
   const evidenceById = useMemo(() => new Map((report?.evidence ?? []).map(item => [item.evidence_id, item])), [report]);
   const materialById = useMemo(() => new Map((report?.materials ?? []).map(item => [item.material_id, item])), [report]);
 
-  if (user === undefined) return <div className="auth-page"><div className="state-card"><span className="loading-dot" />正在连接…</div></div>;
+  const privacyNotice = showPrivacyNotice ? <PrivacyNotice onConfirm={() => setShowPrivacyNotice(false)} /> : null;
 
-  if (!user) return <div className="auth-page">
+  if (user === undefined) return <>{privacyNotice}<div className="auth-page"><div className="state-card"><span className="loading-dot" />正在连接…</div></div></>;
+
+  if (!user) return <>{privacyNotice}<div className="auth-page">
     <section className="auth-intro"><div className="wordmark auth-wordmark"><span className="wordmark-mark">核</span><span>论文核查报告</span></div><div><div className="eyebrow">PRIVATE ARCHIVE</div><h1>保存并查看<br />你的核查报告</h1><p>报告按姓名账号独立保存。登录后只能访问自己此前上传的内容。</p></div></section>
     <section className="auth-card">
       <div className="auth-tabs"><button className={authMode === 'login' ? 'active' : ''} onClick={() => { setAuthMode('login'); setError(''); }}>登录</button><button className={authMode === 'register' ? 'active' : ''} onClick={() => { setAuthMode('register'); setError(''); }}>创建账号</button></div>
@@ -191,9 +194,9 @@ export default function App() {
       </form>
       <p className="auth-footnote">密码至少 8 个字符。姓名相同的账号不能重复注册。</p>
     </section>
-  </div>;
+  </div></>;
 
-  return <div className="site-shell">
+  return <>{privacyNotice}<div className="site-shell">
     <header className="document-nav"><div className="nav-inner">
       <a className="wordmark" href="/" aria-label="返回审阅控制台" onClick={event => { event.preventDefault(); setReport(null); setOpenIssueId(null); setError(''); setNotice(''); }}><span className="wordmark-mark">核</span><span>论文核查报告</span></a>
       <div className="account-actions">
@@ -212,6 +215,20 @@ export default function App() {
       {!loadingReport && !report && <ReportDashboard reports={reports} onOpen={loadReport} onUpload={() => fileRef.current?.click()} />}
       {!loadingReport && report && <ReportView report={report} issues={issues} evidenceById={evidenceById} materialById={materialById} openIssueId={openIssueId} setOpenIssueId={setOpenIssueId} />}
     </main>
+  </div></>;
+}
+
+function PrivacyNotice({ onConfirm }) {
+  return <div className="privacy-notice-backdrop">
+    <section className="privacy-notice" role="dialog" aria-modal="true" aria-labelledby="privacy-notice-title" aria-describedby="privacy-notice-description">
+      <div className="privacy-notice-mark" aria-hidden="true">!</div>
+      <div>
+        <div className="eyebrow">使用提示</div>
+        <h2 id="privacy-notice-title">未发表文章请谨慎上传</h2>
+        <p id="privacy-notice-description">未发表的文章结果不建议放在网站上，直接让 GPT / Claude 解读这个报告，自己查看即可。</p>
+        <button className="primary-action" type="button" autoFocus onClick={onConfirm}>我知道了</button>
+      </div>
+    </section>
   </div>;
 }
 
